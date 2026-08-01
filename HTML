@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mayorcity E-Mart | Campus Marketplace</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <!-- Toast notifications -->
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Top Navigation Header Bar -->
+  <header>
+    <div class="header-container">
+      <h1 class="logo">Mayorcity <span>E-Mart</span></h1>
+
+      <nav id="main-nav">
+        <a href="#featured-listings" class="nav-link active">Home</a>
+        <a href="#about" class="nav-link">About Us</a>
+        <a href="#contact" class="nav-link">Contact Hub</a>
+        <button type="button" id="nav-lf-btn" class="nav-lf-btn">🔎 Lost &amp; Found</button>
+        <a href="./admin.html" id="nav-admin-link" class="nav-admin-link" style="display:none;">🔐 Admin</a>
+
+        <!-- Signed-out state -->
+        <button type="button" id="auth-open-btn" class="auth-open-btn">Sign In</button>
+
+        <!-- Signed-in state (hidden until auth confirmed) -->
+        <div id="user-menu" class="user-menu" style="display:none;">
+          <button type="button" id="user-menu-btn" class="user-menu-btn" aria-haspopup="true" aria-expanded="false">
+            <span class="user-avatar-initials" id="user-initials">?</span>
+            <span class="user-email-short" id="user-email-short"></span>
+            <span class="user-menu-caret">▾</span>
+          </button>
+          <div id="user-dropdown" class="user-dropdown">
+            <p class="user-dropdown-name" id="user-dropdown-name"></p>
+            <p class="user-dropdown-email" id="user-dropdown-email"></p>
+            <hr>
+            <button type="button" id="signout-btn" class="user-dropdown-signout">Sign Out</button>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Live Analytics Dashboard Metrics Banner Section -->
+  <section class="stats-section">
+    <div class="stats-grid">
+      <div class="stat-box">
+        <h3 id="stat-total">0</h3>
+        <p>Total Items Listed</p>
+      </div>
+      <div class="stat-box">
+        <h3 id="stat-market">0</h3>
+        <p>Marketplace Products</p>
+      </div>
+      <div class="stat-box">
+        <h3 id="stat-lost">0</h3>
+        <p>Lost &amp; Found Reports</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hero Welcome Showcase Banner Section -->
+  <section class="hero-section">
+    <h2>Buy. Sell. Find.</h2>
+    <p>A safe, moderated, and professional campus environment connecting students with trusted buyers and sellers while helping lost property find its rightful owner.</p>
+    <div class="hero-cta-buttons">
+      <button id="hero-explore-btn">Explore Marketplace</button>
+      <button id="hero-post-btn" class="secondary-btn">Post a New Item</button>
+      <button id="hero-lf-btn" class="secondary-btn">Report Lost &amp; Found</button>
+    </div>
+  </section>
+
+  <!-- Staff/Admin banner (shown for admins & moderators once signed in) -->
+  <section id="admin-control-bar" style="display:none; background:#fee2e2; border:2px dashed #ef4444; text-align:center;">
+    <h3 class="admin-bar-title" style="color:#991b1b; font-size:16px;">🛡️ ADMIN MODE — you have staff permissions on this account.</h3>
+    <p style="color:#7f1d1d; font-size:13px; margin:4px 0;">
+      Use the <strong>🔐 Admin</strong> link in the navigation above to open the full dashboard.
+    </p>
+  </section>
+
+  <!-- Search Engine & Interface Filters Layout Dashboard -->
+  <section class="control-panel-section">
+    <div class="search-wrapper">
+      <input type="text" id="searchBar" placeholder="🔍 Search listings by product name, description, tags or seller name...">
+    </div>
+
+    <div class="tab-filters">
+      <button class="tab-btn active-tab" data-type="all">All Items</button>
+      <button class="tab-btn" data-type="Market">For Sale</button>
+      <button class="tab-btn" data-type="Lost">Lost &amp; Found</button>
+    </div>
+
+    <div class="categories-wrapper">
+      <h4>Filter Categories</h4>
+      <ul id="category-list">
+        <li class="category-item active-cat">Show All</li>
+        <li class="category-item">Phones & Accessories</li>
+        <li class="category-item">Laptops & Electronics</li>
+        <li class="category-item">Fashion</li>
+        <li class="category-item">Books & Study Materials</li>
+        <li class="category-item">Hostel Items</li>
+        <li class="category-item">Other Items</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Dynamic Product Grid Layout Output Context -->
+  <section id="featured-listings" class="listings-container-section">
+    <h2 id="listings-title">Active Campus Listings</h2>
+    <div class="products-grid" id="products"></div>
+  </section>
+
+  <!-- Item Submission Upload Form Panel Drawer Frame -->
+  <section id="upload-form-section" style="display: none;">
+    <div class="form-header-row">
+      <h2>📤 Post an Item</h2>
+      <button type="button" id="hide-form-btn" class="close-form-btn">&times;</button>
+    </div>
+
+    <form id="postForm">
+      <label for="listingType">Listing Type</label>
+      <select id="listingType">
+        <option value="Market">For Sale</option>
+        <option value="Lost">Lost & Found</option>
+      </select>
+
+      <label for="productName">Product / Item Name</label>
+      <input id="productName" type="text" placeholder="Enter item name" required>
+
+      <label for="productCategory">Category</label>
+      <select id="productCategory">
+        <option>Phones & Accessories</option>
+        <option>Laptops & Electronics</option>
+        <option>Fashion</option>
+        <option>Books & Study Materials</option>
+        <option>Hostel Items</option>
+        <option>Other Items</option>
+      </select>
+
+      <label id="priceLabel" for="price">Price (₦)</label>
+      <input id="price" type="number" placeholder="Enter price">
+
+      <label for="description">Description</label>
+      <textarea id="description" rows="5" placeholder="Describe the item..." required></textarea>
+
+      <label for="seller">Seller Name</label>
+      <input id="seller" type="text" placeholder="Your full name" required>
+
+      <label for="whatsapp">WhatsApp Number</label>
+      <input id="whatsapp" type="tel" placeholder="08012345678" required>
+
+      <label for="image">Item Image</label>
+      <input id="image" type="file" accept="image/*">
+
+      <button type="submit" id="submit-listing-btn">Publish Listing</button>
+    </form>
+  </section>
+
+  <!-- Cinematic View Details Overlay Modal Box -->
+  <div id="viewModal" class="modal-overlay">
+    <div class="modal-box large-modal-box">
+      <span class="modal-close" id="closeViewModal">&times;</span>
+      <div id="viewModalContent"></div>
+    </div>
+  </div>
+
+  <!-- Edit Listing Modal Box -->
+  <div id="editModal" class="modal-overlay">
+    <div class="modal-box">
+      <span class="modal-close" id="closeEditModal">&times;</span>
+      <h3>✏️ Edit Listing</h3>
+      <form id="editForm" class="embedded-clean-form">
+        <input type="hidden" id="editListingId">
+        <label for="editName">Item Name</label>
+        <input id="editName" type="text" required>
+        <label for="editPrice">Price (₦)</label>
+        <input id="editPrice" type="number">
+        <label for="editDescription">Description</label>
+        <textarea id="editDescription" rows="4" required></textarea>
+        <button type="submit" class="submit-action-btn">Save Changes</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Auth Modal: Sign In / Sign Up / Forgot Password -->
+  <div id="authModal" class="modal-overlay">
+    <div class="modal-box">
+      <span class="modal-close" id="closeAuthModal">&times;</span>
+
+      <div class="auth-tabs-row">
+        <button type="button" class="auth-tab active" data-tab="signin" aria-selected="true">Sign In</button>
+        <button type="button" class="auth-tab" data-tab="signup" aria-selected="false">Sign Up</button>
+      </div>
+
+      <!-- Sign In Panel -->
+      <div id="signin-panel">
+        <form id="signinForm">
+          <p class="auth-error" id="signin-error" style="display:none;"></p>
+
+          <label for="signin-email">Email Address</label>
+          <input id="signin-email" type="email" required autocomplete="email">
+
+          <label for="signin-password">Password</label>
+          <div class="pw-field-row">
+            <input id="signin-password" type="password" required autocomplete="current-password">
+            <button type="button" class="toggle-pw" data-target="signin-password">👁</button>
+          </div>
+
+          <a href="#" id="forgot-link" class="auth-link">Forgot password?</a>
+
+          <button type="submit" id="signin-submit" class="auth-submit-btn">Sign In</button>
+        </form>
+        <p class="auth-switch-msg">Don't have an account?
+          <a href="#" class="switch-tab-link" data-tab="signup">Sign up</a>
+        </p>
+      </div>
+
+      <!-- Sign Up Panel -->
+      <div id="signup-panel" style="display:none;">
+        <form id="signupForm">
+          <p class="auth-error" id="signup-error" style="display:none;"></p>
+
+          <label for="signup-name">Full Name</label>
+          <input id="signup-name" type="text" required>
+
+          <label for="signup-email">Email Address</label>
+          <input id="signup-email" type="email" required autocomplete="email">
+
+          <label for="signup-password">Password</label>
+          <div class="pw-field-row">
+            <input id="signup-password" type="password" required minlength="8" autocomplete="new-password">
+            <button type="button" class="toggle-pw" data-target="signup-password">👁</button>
+          </div>
+
+          <label for="signup-phone">WhatsApp / Phone Number</label>
+          <input id="signup-phone" type="tel" placeholder="08012345678" required>
+
+          <label for="signup-matric">Matric Number</label>
+          <input id="signup-matric" type="text" required>
+
+          <label for="signup-department">Department</label>
+          <input id="signup-department" type="text" required>
+
+          <label for="signup-level">Level</label>
+          <select id="signup-level" required>
+            <option value="">Select level</option>
+            <option value="100">100 Level</option>
+            <option value="200">200 Level</option>
+            <option value="300">300 Level</option>
+            <option value="400">400 Level</option>
+            <option value="500">500 Level</option>
+            <option value="Postgraduate">Postgraduate</option>
+          </select>
+
+          <label for="signup-student-id">Student ID Card (front image)</label>
+          <input id="signup-student-id" type="file" accept="image/*" required>
+
+          <button type="submit" id="signup-submit" class="auth-submit-btn">Create Account</button>
+        </form>
+        <p class="auth-switch-msg">Already have an account?
+          <a href="#" class="switch-tab-link" data-tab="signin">Sign in</a>
+        </p>
+      </div>
+
+      <!-- Forgot Password Panel -->
+      <div id="forgot-panel" style="display:none;">
+        <form id="forgotForm">
+          <p class="auth-error" id="forgot-error" style="display:none;"></p>
+          <p class="auth-helper-text">Enter your email and we'll send you a password reset link.</p>
+
+          <label for="forgot-email">Email Address</label>
+          <input id="forgot-email" type="email" required autocomplete="email">
+
+          <button type="submit" id="forgot-submit" class="auth-submit-btn">Send Reset Link</button>
+        </form>
+        <p class="auth-switch-msg">
+          <a href="#" id="back-to-signin">← Back to Sign In</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lost & Found Report Modal -->
+  <div id="lfModal" class="modal-overlay">
+    <div class="modal-box">
+      <span class="modal-close" id="closeLfModal">&times;</span>
+      <h3>🔎 Report a Lost or Found Item</h3>
+      <form id="lfForm">
+        <p class="auth-error" id="lf-form-error" style="display:none;"></p>
+
+        <label>Report Type</label>
+        <div class="lf-radio-row">
+          <label class="lf-radio-option"><input type="radio" name="lostOrFound" value="Lost" checked> Lost Item</label>
+          <label class="lf-radio-option"><input type="radio" name="lostOrFound" value="Found"> Found Item</label>
+        </div>
+
+        <label for="lf-itemName">Item Name</label>
+        <input id="lf-itemName" type="text" required>
+
+        <label for="lf-category">Category</label>
+        <select id="lf-category">
+          <option>Phones & Accessories</option>
+          <option>Laptops & Electronics</option>
+          <option>Fashion</option>
+          <option>Books & Study Materials</option>
+          <option>Hostel Items</option>
+          <option>Other Items</option>
+        </select>
+
+        <label for="lf-description">Description</label>
+        <textarea id="lf-description" rows="4" required></textarea>
+
+        <label for="lf-location">Location (where lost / found)</label>
+        <input id="lf-location" type="text" required>
+
+        <label for="lf-date">Date</label>
+        <input id="lf-date" type="date">
+
+        <label for="lf-contactName">Your Name</label>
+        <input id="lf-contactName" type="text" required>
+
+        <label for="lf-whatsapp">WhatsApp Number</label>
+        <input id="lf-whatsapp" type="tel" placeholder="08012345678" required>
+
+        <label for="lf-image">Photo (optional)</label>
+        <input id="lf-image" type="file" accept="image/*">
+        <p id="lf-anon-img-note" class="auth-helper-text" style="display:none;">Sign in to attach a photo.</p>
+
+        <button type="submit" id="lf-submit-btn">📢 Submit Report</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Editorial Section About Core Vision Panel -->
+  <section id="about" class="editorial-section">
+    <h2>Our Mission</h2>
+    <p class="lead-text">Mayorcity E-Mart is a trusted campus marketplace where students can safely buy, sell and recover lost items.</p>
+    <p>Built by <strong>Adedeji Mayowa</strong>, the platform provides a simple and secure environment for campus trading while reducing fraud and helping lost property return to its owner.</p>
+    <p><strong>Vision:</strong> Build a reliable digital marketplace for every student community.</p>
+  </section>
+
+  <!-- Core Contact Desk Information Box -->
+  <section id="contact" class="editorial-section contact-accent-block">
+    <h2>📬 Contact</h2>
+    <p>Questions, suggestions or reports? Reach out below.</p>
+    <div class="contact-links-grid">
+      <div class="contact-card-box">
+        <h5>Email</h5>
+        <a href="mailto:adedejimayowa27@gmail.com">adedejimayowa27@gmail.com</a>
+      </div>
+      <div class="contact-card-box">
+        <h5>WhatsApp</h5>
+        <a href="https://wa.me" target="_blank">09150434157</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Complete Standard Company Footer Template Component -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-brand-column">
+        <h3>Mayorcity <span>E-Mart</span></h3>
+        <p>The premium campus ecosystem engineered explicitly for the digital student collective. Buy, trade, or recover lost property cleanly under direct verification.</p>
+      </div>
+      <div class="footer-links-column">
+        <h5>Quick Links</h5>
+        <a href="#featured-listings">Storefront Feed</a>
+        <a href="#about">Our Mission</a>
+        <a href="#contact">Contact Mayowa</a>
+      </div>
+      <div class="footer-social-column">
+        <h5>Connect via Networks</h5>
+        <div class="social-icon-row">
+          <a href="https://x.com" target="_blank" class="social-link">X (Twitter)</a>
+          <a href="https://linkedin.com" target="_blank" class="social-link">LinkedIn</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-copyright-banner">
+      <p>&copy; 2026 Mayorcity E-Mart. Founded by Adedeji Mayowa. All Rights Reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Floating Back to Top Arrow Component -->
+  <button type="button" id="backToTopBtn" title="Go to top" style="display: none;">↑</button>
+
+  <script src="./config.js"></script>
+  <script type="module" src="./script.js"></script>
+</body>
+</html>
