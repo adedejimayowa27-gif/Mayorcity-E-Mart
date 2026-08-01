@@ -1,0 +1,334 @@
+Yes. Here's the prompt I would use. It continues from the current state, avoids wasting Agent tokens by redoing work, and includes all the improvements we've discussed.
+
+
+---
+
+Replit Agent Prompt
+
+> Continue the existing Mayorcity E-Mart project from its current state. Do not restart, regenerate, or replace completed work. Reuse all existing Supabase files, project structure, and UI. The Sign In button has already been added but is not functional—complete the remaining integration instead of rebuilding it.
+
+Preserve every existing marketplace feature including:
+
+Posting listings
+
+Editing listings
+
+Deleting listings
+
+Search
+
+Category filters
+
+WhatsApp seller contact
+
+View Details modal
+
+Responsive design
+
+
+1. Supabase Authentication
+
+Complete Supabase Authentication by implementing:
+
+Sign Up
+
+Sign In
+
+Sign Out
+
+Forgot Password
+
+Password Reset
+
+Email verification
+
+
+The existing Sign In button should open a modern authentication modal instead of doing nothing.
+
+2. Student Verification System
+
+During registration, require:
+
+Full Name
+
+Email Address
+
+Phone Number
+
+Matric Number
+
+Department
+
+Level
+
+Student ID Card upload (front image)
+
+
+Store the Student ID securely in Supabase Storage.
+
+Every user should have a verification status:
+
+Pending
+
+Verified
+
+Rejected
+
+Suspended
+
+
+Every new account starts as Pending.
+
+Pending users may:
+
+Browse listings
+
+Search listings
+
+View product details
+
+Contact sellers on WhatsApp
+
+
+Pending users may NOT:
+
+Post listings
+
+Edit listings
+
+Delete listings
+
+
+Verified users should display a green Verified Student ✓ badge.
+
+3. Database & Storage
+
+Replace localStorage with Supabase Database.
+
+Store:
+
+Listings
+
+User profiles
+
+Verification records
+
+Reports
+
+Ratings
+
+
+Store all uploaded images and Student IDs in Supabase Storage.
+
+Existing marketplace functionality must continue to work exactly as before.
+
+4. Ownership Rules
+
+Ensure users can only:
+
+Edit their own listings
+
+Delete their own listings
+
+
+They must never be able to modify another user's listings.
+
+5. Admin Role System
+
+Do NOT hard-code the administrator.
+
+Create a role-based permission system.
+
+Roles:
+
+User
+
+Moderator
+
+Admin
+
+
+Only Admins can access the Admin Dashboard.
+
+Moderators can:
+
+Review reports
+
+Remove listings
+
+Suspend listings
+
+
+Moderators cannot:
+
+Promote users
+
+Change administrator settings
+
+
+6. Professional Admin Dashboard
+
+Create a secure Admin Dashboard with:
+
+User Management
+
+View all users
+
+Search users
+
+View user profiles
+
+View uploaded Student IDs
+
+Approve verification
+
+Reject verification
+
+Suspend users
+
+Reactivate users
+
+Delete fraudulent accounts
+
+Assign Moderator role
+
+Assign Admin role
+
+Remove Moderator/Admin role
+
+
+Verification Queue
+
+Show every pending verification request including:
+
+Student ID image
+
+Full Name
+
+Email
+
+Phone Number
+
+Matric Number
+
+Department
+
+Level
+
+Registration date
+
+
+Allow:
+
+Approve
+
+Reject
+
+
+Listing Management
+
+Allow Admins to:
+
+View every listing
+
+Hide listings
+
+Restore listings
+
+Delete listings
+
+See listing owner
+
+Review reported listings
+
+
+7. Anti-Fraud System
+
+Add:
+
+Report Listing
+
+Report User
+
+Block User
+
+Account Suspension
+
+Listing Moderation
+
+Audit Log for admin actions
+
+
+8. Seller Trust System
+
+Every seller profile should display:
+
+Verified Student ✓
+
+Seller Rating
+
+Number of successful sales
+
+Member since date
+
+Identity Verified status
+
+
+Buyers should be able to rate sellers after completed transactions.
+
+9. Future Payment Preparation
+
+Design the database and application so Paystack can be integrated later without restructuring the project.
+
+Do not implement payments yet.
+
+10. Code Quality
+
+Keep the current Mayorcity E-Mart branding and design.
+
+Do not remove any working functionality.
+
+Improve maintainability where necessary.
+
+Before making major changes, explain:
+
+Database tables
+
+Storage buckets
+
+Authentication flow
+
+Role-based permissions
+
+Row-Level Security (RLS) policies
+
+How each new feature integrates with the existing application.
+
+
+
+
+
+---
+
+One final recommendation
+
+After the Agent completes this, don't ask it to add Paystack immediately.
+
+Instead, spend a day testing:
+
+Every authentication flow.
+
+Verification approval/rejection.
+
+Admin dashboard.
+
+Posting and editing.
+
+Mobile responsiveness.
+
+Image uploads.
+
+Search and filters.
+
+
+If all of that is stable, then the next task should be Paystack integration. That way, you'll be adding payments to a solid, well-tested foundation rather than debugging multiple systems at once.

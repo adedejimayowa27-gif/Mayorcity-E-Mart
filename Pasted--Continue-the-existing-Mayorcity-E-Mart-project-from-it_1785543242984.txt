@@ -1,0 +1,192 @@
+> Continue the existing Mayorcity E-Mart project from its current state. Do not restart, regenerate, or replace completed work. Reuse all existing Supabase files, project structure, and UI. The Sign In button has already been added but is not functional—complete the remaining integration instead of rebuilding it.
+
+Preserve all existing marketplace functionality, including posting listings, editing, deleting, search, category filters, WhatsApp seller contact, View Details, and responsive design.
+
+Complete Supabase Authentication by implementing:
+
+Sign Up
+
+Sign In
+
+Sign Out
+
+Forgot Password
+
+Password Reset
+
+Email Verification
+
+
+Make the existing Sign In button fully functional by opening a modern authentication modal.
+
+Implement a Student Verification System.
+
+During registration, require:
+
+Full Name
+
+Email Address
+
+Phone Number
+
+Matric Number
+
+Department
+
+Level
+
+Student ID Card upload (front image)
+
+
+Store Student ID uploads securely in Supabase Storage.
+
+Every account should have one of these verification statuses:
+
+Pending
+
+Verified
+
+Rejected
+
+Suspended
+
+
+Every new account starts as Pending.
+
+Pending users can:
+
+Browse listings
+
+Search listings
+
+View product details
+
+Contact sellers via WhatsApp
+
+
+Pending users cannot:
+
+Post listings
+
+Edit listings
+
+Delete listings
+
+
+Verified users should display a green Verified Student ✓ badge on their profile and listings.
+
+Replace localStorage with Supabase Database.
+
+Store:
+
+User accounts
+
+Listings
+
+Images
+
+Student verification records
+
+Reports
+
+Ratings
+
+
+Store listing images and Student IDs in Supabase Storage.
+
+Ensure users can only edit or delete their own listings.
+
+Implement a secure role-based permission system instead of hard-coding the administrator.
+
+Roles:
+
+User
+
+Moderator
+
+Admin
+
+
+Only Admins can access the Admin Dashboard.
+
+Moderators can review reports and moderate listings but cannot change administrator settings or roles.
+
+Create a professional Admin Dashboard where Admins can:
+
+View all users
+
+Search users
+
+View uploaded Student IDs
+
+Approve or reject verification requests
+
+Suspend or reactivate users
+
+Delete fraudulent accounts
+
+Assign or remove Moderator and Admin roles
+
+View all listings
+
+Hide, restore, or delete listings
+
+Review reported listings
+
+View an audit log of important admin actions
+
+
+The Verification Queue should display:
+
+Student ID image
+
+Full Name
+
+Email
+
+Phone Number
+
+Matric Number
+
+Department
+
+Level
+
+Registration Date
+
+
+with Approve and Reject actions.
+
+Implement anti-fraud features:
+
+Report Listing
+
+Report User
+
+Block User
+
+Account Suspension
+
+Listing Moderation
+
+Audit Log
+
+
+Implement a Seller Trust System displaying:
+
+Verified Student ✓
+
+Seller Rating
+
+Number of Successful Sales
+
+Member Since
+
+Identity Verified status
+
+
+Allow buyers to rate sellers after completed transactions.
+
+Structure the database and application so Paystack can be integrated later without major restructuring, but do not implement payments yet.
+
+Keep the existing Mayorcity E-Mart branding and design. Do not remove any working functionality. Before applying major changes, explain the database schema, storage buckets, authentication flow, role-based permissions, and Row-Level Security (RLS) policies, then implement the changes while preserving the current application.

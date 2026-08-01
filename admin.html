@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Mayorcity E-Mart</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./admin.css">
+</head>
+<body class="admin-body">
+
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Sidebar -->
+  <aside class="admin-sidebar" id="admin-sidebar">
+    <div class="admin-sidebar-brand">
+      <h2>E-Mart <span>Admin</span></h2>
+      <p class="admin-sidebar-role" id="sidebar-role">Loading…</p>
+    </div>
+
+    <nav class="admin-sidebar-nav">
+      <button class="admin-nav-btn active" data-tab="overview">
+        <span class="nav-icon">📊</span> Overview
+      </button>
+      <button class="admin-nav-btn" data-tab="verification">
+        <span class="nav-icon">🪪</span> Verification Queue
+        <span class="admin-badge" id="badge-verification">0</span>
+      </button>
+      <button class="admin-nav-btn" data-tab="users">
+        <span class="nav-icon">👥</span> Users
+      </button>
+      <button class="admin-nav-btn" data-tab="listings">
+        <span class="nav-icon">🏪</span> Listings
+      </button>
+      <button class="admin-nav-btn" data-tab="reports">
+        <span class="nav-icon">⚑</span> Reports
+        <span class="admin-badge" id="badge-reports">0</span>
+      </button>
+      <button class="admin-nav-btn" data-tab="audit">
+        <span class="nav-icon">📋</span> Audit Log
+      </button>
+    </nav>
+
+    <div class="admin-sidebar-footer">
+      <a href="./index.html" class="admin-back-link">← Back to Marketplace</a>
+      <button type="button" id="admin-signout-btn" class="admin-signout-btn">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="admin-main" id="admin-main">
+
+    <!-- Access denied (shown while checking auth) -->
+    <div id="access-denied" class="admin-access-denied" style="display:none;">
+      <div class="access-denied-box">
+        <p class="access-icon">🔒</p>
+        <h2>Access Restricted</h2>
+        <p>This page is only accessible to administrators.</p>
+        <a href="./index.html" class="access-back-btn">← Go to Marketplace</a>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="admin-loading" class="admin-page-loading">
+      <div class="loading-spinner"></div>
+      <p>Verifying access…</p>
+    </div>
+
+    <!-- Dashboard content (hidden until auth confirmed) -->
+    <div id="admin-content" style="display:none;">
+
+      <!-- ── OVERVIEW TAB ────────────────────────────────────────── -->
+      <div id="tab-overview" class="admin-tab-panel active">
+        <div class="admin-page-header">
+          <h1>Dashboard Overview</h1>
+          <p class="admin-page-sub" id="admin-greeting">Welcome back.</p>
+        </div>
+
+        <div class="admin-stats-grid">
+          <div class="admin-stat-card">
+            <p class="asc-label">Total Users</p>
+            <h2 class="asc-value" id="ov-total-users">—</h2>
+          </div>
+          <div class="admin-stat-card asc-pending">
+            <p class="asc-label">Pending Verification</p>
+            <h2 class="asc-value" id="ov-pending">—</h2>
+          </div>
+          <div class="admin-stat-card asc-green">
+            <p class="asc-label">Verified Students</p>
+            <h2 class="asc-value" id="ov-verified">—</h2>
+          </div>
+          <div class="admin-stat-card">
+            <p class="asc-label">Total Listings</p>
+            <h2 class="asc-value" id="ov-listings">—</h2>
+          </div>
+          <div class="admin-stat-card asc-red">
+            <p class="asc-label">Open Reports</p>
+            <h2 class="asc-value" id="ov-reports">—</h2>
+          </div>
+          <div class="admin-stat-card">
+            <p class="asc-label">Hidden Listings</p>
+            <h2 class="asc-value" id="ov-hidden">—</h2>
+          </div>
+        </div>
+
+        <div class="admin-section-card">
+          <h3>Recent Activity</h3>
+          <div id="recent-activity" class="audit-list">
+            <p class="admin-empty-msg">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── VERIFICATION QUEUE TAB ──────────────────────────────── -->
+      <div id="tab-verification" class="admin-tab-panel">
+        <div class="admin-page-header">
+          <h1>Verification Queue</h1>
+          <p class="admin-page-sub">Review student ID submissions and approve or reject accounts.</p>
+        </div>
+
+        <div class="admin-toolbar">
+          <select id="verif-status-filter" class="admin-filter-select">
+            <option value="pending">Pending</option>
+            <option value="verified">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <button class="admin-refresh-btn" id="verif-refresh-btn">↻ Refresh</button>
+        </div>
+
+        <div id="verif-list" class="verif-list">
+          <p class="admin-empty-msg">Loading verification requests…</p>
+        </div>
+      </div>
+
+      <!-- ── USERS TAB ───────────────────────────────────────────── -->
+      <div id="tab-users" class="admin-tab-panel">
+        <div class="admin-page-header">
+          <h1>User Management</h1>
+        </div>
+
+        <div class="admin-toolbar">
+          <input type="text" id="user-search" class="admin-search-input"
+                 placeholder="Search by name, email or matric…">
+          <select id="user-status-filter" class="admin-filter-select">
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="verified">Verified</option>
+            <option value="rejected">Rejected</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <select id="user-role-filter" class="admin-filter-select">
+            <option value="">All roles</option>
+            <option value="user">User</option>
+            <option value="moderator">Moderator</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="users-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Matric</th>
+                <th>Department</th>
+                <th>Level</th>
+                <th>Status</th>
+                <th>Role</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="9" class="admin-empty-msg">Loading users…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── LISTINGS TAB ────────────────────────────────────────── -->
+      <div id="tab-listings" class="admin-tab-panel">
+        <div class="admin-page-header">
+          <h1>Listing Management</h1>
+        </div>
+
+        <div class="admin-toolbar">
+          <input type="text" id="listing-search" class="admin-search-input"
+                 placeholder="Search listings…">
+          <select id="listing-status-filter" class="admin-filter-select">
+            <option value="">All statuses</option>
+            <option value="Active">Active</option>
+            <option value="Sold">Sold</option>
+            <option value="Hidden">Hidden</option>
+          </select>
+          <select id="listing-type-filter" class="admin-filter-select">
+            <option value="">All types</option>
+            <option value="Market">For Sale</option>
+            <option value="Lost">Lost &amp; Found</option>
+          </select>
+        </div>
+
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="listings-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Price</th>
+                <th>Seller</th>
+                <th>Status</th>
+                <th>Reports</th>
+                <th>Posted</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="listings-tbody">
+              <tr><td colspan="9" class="admin-empty-msg">Loading listings…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── REPORTS TAB ─────────────────────────────────────────── -->
+      <div id="tab-reports" class="admin-tab-panel">
+        <div class="admin-page-header">
+          <h1>Reports</h1>
+          <p class="admin-page-sub">Review user-submitted reports on listings and accounts.</p>
+        </div>
+
+        <div class="admin-toolbar">
+          <select id="report-status-filter" class="admin-filter-select">
+            <option value="pending">Pending</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="resolved">Resolved</option>
+            <option value="dismissed">Dismissed</option>
+          </select>
+          <button class="admin-refresh-btn" id="reports-refresh-btn">↻ Refresh</button>
+        </div>
+
+        <div id="reports-list" class="reports-list">
+          <p class="admin-empty-msg">Loading reports…</p>
+        </div>
+      </div>
+
+      <!-- ── AUDIT LOG TAB ───────────────────────────────────────── -->
+      <div id="tab-audit" class="admin-tab-panel">
+        <div class="admin-page-header">
+          <h1>Audit Log</h1>
+          <p class="admin-page-sub">Immutable record of all administrative actions.</p>
+        </div>
+
+        <div class="admin-toolbar">
+          <input type="text" id="audit-search" class="admin-search-input"
+                 placeholder="Filter by action or email…">
+          <button class="admin-refresh-btn" id="audit-refresh-btn">↻ Refresh</button>
+        </div>
+
+        <div id="audit-list" class="audit-list">
+          <p class="admin-empty-msg">Loading audit log…</p>
+        </div>
+      </div>
+
+    </div><!-- /admin-content -->
+  </main>
+
+  <!-- Student ID Preview Modal -->
+  <div id="id-preview-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:520px;text-align:center;">
+      <span class="modal-close" id="close-id-preview" aria-label="Close">&times;</span>
+      <h3 style="margin-bottom:12px;">Student ID Card</h3>
+      <img id="id-preview-img" src="" alt="Student ID" style="max-width:100%;border-radius:10px;border:1px solid #e2e8f0;">
+      <p id="id-preview-name" style="margin-top:12px;font-weight:700;"></p>
+    </div>
+  </div>
+
+  <script src="./config.js"></script>
+  <script type="module" src="./admin.js"></script>
+</body>
+</html>
