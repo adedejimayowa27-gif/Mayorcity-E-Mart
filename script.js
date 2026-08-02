@@ -27,6 +27,8 @@ const productsGrid      = document.getElementById('products');
 const searchBar         = document.getElementById('searchBar');
 const uploadFormSection = document.getElementById('upload-form-section');
 const adminControlBar   = document.getElementById('admin-control-bar');
+const idUploadBanner    = document.getElementById('id-upload-banner');
+const idUploadModal     = document.getElementById('idUploadModal');
 const viewModal         = document.getElementById('viewModal');
 const editModal         = document.getElementById('editModal');
 const authModal         = document.getElementById('authModal');
@@ -266,10 +268,11 @@ async function handleSignUp({ fullName, email, password, phone, matricNumber, de
             const { error: upErr } = await supabase.storage
                 .from('student-ids')
                 .upload(path, studentIdFile, { upsert: true });
-            if (!upErr) {
-                const { data: urlData } = supabase.storage.from('student-ids').getPublicUrl(path);
-                studentIdUrl = urlData?.publicUrl || path;
-            }
+            // student-ids is a PRIVATE bucket — getPublicUrl() would return a link
+            // that never actually loads. Store the raw path instead; admin.js
+            // generates a short-lived signed URL from this path when it needs to
+            // display the image.
+            if (!upErr) studentIdUrl = path;
         } catch (_) { /* non-fatal — user can re-upload later */ }
     }
 
@@ -340,11 +343,22 @@ function updateAuthUI() {
             const titleEl = adminControlBar.querySelector('.admin-bar-title');
             if (titleEl && isMod()) titleEl.textContent = '🛡️ MODERATOR MODE — You can review and moderate listings.';
         }
+
+        // Student ID upload banner — shown when the account has no ID on file yet.
+        // This covers the common case where email confirmation is required at
+        // signup, so the browser had no session yet and the original upload
+        // attempt was skipped.
+        if (idUploadBanner) {
+            const stillPending = currentProfile?.verification_status === 'pending';
+            const noIdYet      = !currentProfile?.student_id_url;
+            idUploadBanner.style.display = (stillPending && noIdYet) ? 'block' : 'none';
+        }
     } else {
         if (authBtn)  authBtn.style.display   = '';
         if (userMenu) userMenu.style.display  = 'none';
         if (adminControlBar) adminControlBar.style.display = 'none';
         if (adminLink) adminLink.style.display = 'none';
+        if (idUploadBanner) idUploadBanner.style.display = 'none';
     }
 
     // Show/hide post form CTA
@@ -569,11 +583,14 @@ async function postListing(formData, imageFile) {
     if (!currentUser) throw new Error('You must be signed in to post a listing.');
     if (!canPost())   throw new Error('Your account must be verified before posting. Please wait for admin approval.');
 
+    const isLost = formData.listingType === 'Lost';
+
+    // Upload image first either way — no point charging someone, then losing
+    // their listing to a slow/failed upload afterward.
     let imageUrl = '';
     if (imageFile) {
         const compressedBlob = await readImageAsCompressedDataURL(imageFile);
-        const ext  = 'jpg';
-        const path = `${currentUser.id}/${Date.now()}.${ext}`;
+        const path = `${currentUser.id}/${Date.now()}.jpg`;
         const { error: upErr } = await supabase.storage
             .from('listing-images')
             .upload(path, compressedBlob, { contentType: 'image/jpeg' });
@@ -583,21 +600,89 @@ async function postListing(formData, imageFile) {
         }
     }
 
-    const isLost = formData.listingType === 'Lost';
-    const { error } = await supabase.from('listings').insert({
-        emart_id:       generateEmartId(),
-        product_name:   formData.productName,
-        type:           formData.listingType,
-        category:       formData.productCategory,
-        price:          isLost ? '0' : String(formData.price || 0),
-        description:    formData.description,
-        image_url:      imageUrl,
-        seller_name:    formData.seller,
-        seller_whatsapp: formData.whatsapp,
-        user_id:        currentUser.id
-    });
+    if (isLost) {
+        // Lost & Found posted through the main form stays free — direct insert.
+        const { error } = await supabase.from('listings').insert({
+            emart_id:        generateEmartId(),
+            product_name:    formData.productName,
+            type:            'Lost',
+            category:        formData.productCategory,
+            price:           '0',
+            description:     formData.description,
+            image_url:       imageUrl,
+            seller_name:     formData.seller,
+            seller_whatsapp: formData.whatsapp,
+            user_id:         currentUser.id
+        });
+        if (error) throw new Error(error.message);
+        return;
+    }
 
-    if (error) throw new Error(error.message);
+    // ── Marketplace ("For Sale") listing — requires the ₦200 posting fee ──
+    // 1. Collect payment client-side via Paystack Inline (public key only —
+    //    safe to expose in the browser).
+    const reference = await collectListingFeePayment(currentUser.email);
+
+    // 2. Hand the reference + listing data to the verify-and-post-listing
+    //    Edge Function. It re-checks the payment with Paystack's SECRET key
+    //    (never exposed to the browser) and only then creates the listing,
+    //    using the service role. Direct client inserts for Market listings
+    //    are blocked by RLS — this Edge Function is the only path that can
+    //    create one, so the fee can't be bypassed from the browser console.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Your session expired — please sign in again.');
+
+    const res = await fetch(`${window.SUPABASE_URL}/functions/v1/verify-and-post-listing`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': window.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+            reference,
+            listing: {
+                product_name:    formData.productName,
+                category:        formData.productCategory,
+                price:           formData.price || 0,
+                description:     formData.description,
+                image_url:       imageUrl,
+                seller_name:     formData.seller,
+                seller_whatsapp: formData.whatsapp
+            }
+        })
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.error) {
+        throw new Error(result.error || 'Payment was received but the listing could not be created. Please contact support with your payment reference: ' + reference);
+    }
+}
+
+// Opens the Paystack Inline popup for the ₦200 listing fee.
+// Resolves with the payment reference on success; rejects if the user closes
+// the popup or Paystack isn't configured/loaded.
+function collectListingFeePayment(email) {
+    return new Promise((resolve, reject) => {
+        if (!window.PaystackPop) {
+            reject(new Error('Payment system failed to load. Please check your connection and try again.'));
+            return;
+        }
+        if (!window.PAYSTACK_PUBLIC_KEY) {
+            reject(new Error('Payments are not configured yet. Please contact the site admin.'));
+            return;
+        }
+        const handler = window.PaystackPop.setup({
+            key: window.PAYSTACK_PUBLIC_KEY,
+            email: email,
+            amount: 20000, // ₦200 in kobo
+            currency: 'NGN',
+            ref: 'EMART-' + Date.now() + '-' + Math.floor(Math.random() * 100000),
+            callback: function(response) { resolve(response.reference); },
+            onClose: function() { reject(new Error('Payment was not completed.')); }
+        });
+        handler.openIframe();
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1046,6 +1131,69 @@ function showPostForm() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// EVENT LISTENERS — STUDENT ID UPLOAD (post-signup / post-confirmation)
+// ═══════════════════════════════════════════════════════════════════════
+function bindIdUploadModal() {
+    document.getElementById('open-id-upload-btn')?.addEventListener('click', () => {
+        if (idUploadModal) idUploadModal.style.display = 'flex';
+    });
+    document.getElementById('closeIdUploadModal')?.addEventListener('click', () => {
+        if (idUploadModal) idUploadModal.style.display = 'none';
+    });
+    idUploadModal?.addEventListener('click', e => {
+        if (e.target === idUploadModal) idUploadModal.style.display = 'none';
+    });
+
+    document.getElementById('idUploadForm')?.addEventListener('submit', async e => {
+        e.preventDefault();
+        const errorEl = document.getElementById('id-upload-error');
+        if (errorEl) errorEl.style.display = 'none';
+
+        const fileInput = document.getElementById('id-upload-file');
+        const file = fileInput?.files?.[0];
+        if (!file) {
+            if (errorEl) { errorEl.textContent = 'Please choose an image first.'; errorEl.style.display = 'block'; }
+            return;
+        }
+        if (!currentUser) return;
+
+        const submitBtn = document.getElementById('id-upload-submit');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="btn-spinner"></span>Uploading…'; }
+
+        try {
+            const ext  = file.name.split('.').pop() || 'jpg';
+            const path = `${currentUser.id}/student-id.${ext}`;
+
+            const { error: upErr } = await supabase.storage
+                .from('student-ids')
+                .upload(path, file, { upsert: true });
+            if (upErr) throw new Error(upErr.message);
+
+            // student-ids is a private bucket — store the path, not a public URL.
+            // admin.js generates a fresh signed URL from this path when displaying it.
+            const { error: profileErr } = await supabase.from('profiles')
+                .update({ student_id_url: path })
+                .eq('id', currentUser.id);
+            if (profileErr) throw new Error(profileErr.message);
+
+            const { error: verifErr } = await supabase.from('student_verifications')
+                .update({ student_id_url: path })
+                .eq('user_id', currentUser.id);
+            if (verifErr) throw new Error(verifErr.message);
+
+            await loadCurrentProfile(currentUser.id);
+            updateAuthUI();
+            if (idUploadModal) idUploadModal.style.display = 'none';
+            showToast('Student ID uploaded! An admin will review it shortly.', 'success');
+        } catch (err) {
+            if (errorEl) { errorEl.textContent = err.message; errorEl.style.display = 'block'; }
+        } finally {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Upload ID'; }
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // EVENT LISTENERS — AUTH MODAL
 // ═══════════════════════════════════════════════════════════════════════
 function bindAuthModal() {
@@ -1344,6 +1492,7 @@ document.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════════════════════
 async function init() {
     bindAuthModal();
+    bindIdUploadModal();
     bindListingEvents();
     bindLfModal();
     bindBackToTop();
