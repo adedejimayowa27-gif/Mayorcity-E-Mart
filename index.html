@@ -81,6 +81,15 @@
     </p>
   </section>
 
+  <!-- Prompt to finish verification (shown when signed in with no student ID on file yet) -->
+  <section id="id-upload-banner" style="display:none; background:#eff6ff; border:2px dashed #3b82f6; text-align:center;">
+    <h3 style="color:#1d4ed8; font-size:16px;">🪪 One step left — upload your Student ID</h3>
+    <p style="color:#1e3a8a; font-size:13px; margin:4px 0;">
+      Your account is pending review. Upload a photo of your Student ID card so an admin can verify you.
+    </p>
+    <button type="button" id="open-id-upload-btn" style="margin-top:6px;">Upload Student ID</button>
+  </section>
+
   <!-- Search Engine & Interface Filters Layout Dashboard -->
   <section class="control-panel-section">
     <div class="search-wrapper">
@@ -334,6 +343,21 @@
     </div>
   </div>
 
+  <!-- Student ID Upload Modal (post-signup completion) -->
+  <div id="idUploadModal" class="modal-overlay">
+    <div class="modal-box">
+      <span class="modal-close" id="closeIdUploadModal">&times;</span>
+      <h3>🪪 Upload Student ID</h3>
+      <p class="auth-helper-text">A clear photo of the front of your Student ID card. This is only visible to you and admins.</p>
+      <form id="idUploadForm">
+        <p class="auth-error" id="id-upload-error" style="display:none;"></p>
+        <label for="id-upload-file">Student ID Card (front image)</label>
+        <input id="id-upload-file" type="file" accept="image/*" required>
+        <button type="submit" id="id-upload-submit" class="auth-submit-btn">Upload ID</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Editorial Section About Core Vision Panel -->
   <section id="about" class="editorial-section">
     <h2>Our Mission</h2>
@@ -374,8 +398,8 @@
       <div class="footer-social-column">
         <h5>Connect via Networks</h5>
         <div class="social-icon-row">
-          <a href="https://x.com" target="_blank" class="social-link">X (Twitter)</a>
-          <a href="https://linkedin.com" target="_blank" class="social-link">LinkedIn</a>
+          <a href="https://x.com/AdedejiMayowa27" target="_blank" class="social-link">X (Twitter)</a>
+          <a href="https://www.linkedin.com/in/mayowa-adedeji-3173b3378?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" class="social-link">LinkedIn</a>
         </div>
       </div>
     </div>
@@ -388,6 +412,7 @@
   <button type="button" id="backToTopBtn" title="Go to top" style="display: none;">↑</button>
 
   <script src="./config.js"></script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
   <script type="module" src="./script.js"></script>
 </body>
 </html>
