@@ -199,34 +199,15 @@ async function loadVerification() {
         return;
     }
 
-    // student-ids is a PRIVATE bucket, so the stored value is just a storage
-    // path (e.g. "userId/student-id.jpg"), not a directly-loadable URL.
-    // Generate a short-lived signed URL per row before rendering so the
-    // thumbnail and preview modal actually display the image.
-    const signedUrls = await Promise.all(data.map(async v => {
-        if (!v.student_id_url) return null;
-        try {
-            const { data: signed, error: signErr } = await supabase.storage
-                .from('student-ids')
-                .createSignedUrl(v.student_id_url, 3600); // 1 hour
-            if (signErr) return null;
-            return signed?.signedUrl || null;
-        } catch (_) { return null; }
-    }));
-
     if (listEl) {
-        listEl.innerHTML = data.map((v, i) => {
-            const signedUrl = signedUrls[i];
-            return `
+        listEl.innerHTML = data.map(v => `
             <div class="verif-card" data-id="${esc(v.id)}" data-user-id="${esc(v.user_id)}">
                 <div class="verif-id-section">
-                    ${signedUrl
-                        ? `<img src="${esc(signedUrl)}" alt="Student ID"
-                               class="verif-id-thumb" data-src="${esc(signedUrl)}"
+                    ${v.student_id_url
+                        ? `<img src="${esc(v.student_id_url)}" alt="Student ID"
+                               class="verif-id-thumb" data-src="${esc(v.student_id_url)}"
                                data-name="${esc(v.full_name)}">`
-                        : v.student_id_url
-                            ? `<div class="verif-no-id">ID on file — preview unavailable</div>`
-                            : `<div class="verif-no-id">No ID uploaded</div>`}
+                        : `<div class="verif-no-id">No ID uploaded</div>`}
                 </div>
                 <div class="verif-details">
                     <h4 class="verif-name">${esc(v.full_name)}</h4>
