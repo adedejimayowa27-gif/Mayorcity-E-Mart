@@ -497,6 +497,32 @@ footer {
   .hero-section h2 { font-size: 32px; }
   header { padding: 15px; }
   section { margin: 15px; padding: 20px; }
+
+  /* Nav: stack into two clean rows instead of one crowded wrapping line */
+  nav#main-nav {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    row-gap: 12px;
+  }
+  nav#main-nav .nav-link { padding: 4px 0; font-size: 14px; }
+  .nav-lf-btn { padding: 7px 12px; font-size: 12px; }
+  .auth-open-btn { padding: 8px 16px; font-size: 13px; }
+  .nav-admin-link { font-size: 14px; }
+
+  .user-menu-btn { padding: 5px 10px 5px 5px; }
+  .user-email-short { display: none; }        /* keep just the avatar + caret on small screens */
+  .user-dropdown { left: 50%; right: auto; transform: translateX(-50%); }
+
+  .hero-cta-buttons { flex-direction: column; align-items: stretch; }
+  .hero-cta-buttons button { width: 100%; }
+
+  .modal-box { padding: 20px; max-height: 85vh; }
+  .auth-tabs-row { font-size: 13px; }
+  .lf-radio-row { gap: 12px; }
+
+  .products-grid { grid-template-columns: 1fr; }
 }
 /* --- Floating Back to Top Button --- */
 #backToTopBtn {
