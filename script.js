@@ -19,6 +19,8 @@ let currentUser    = null; // Supabase auth.User
 let currentProfile = null; // profiles row
 let currentTab     = 'all';
 let currentCategory = 'Show All';
+let currentPage     = 1;
+const LISTINGS_PER_PAGE = 12;
 
 // ═══════════════════════════════════════════════════════════════════════
 // DOM REFS
@@ -524,10 +526,16 @@ function displayListings() {
 
     if (filtered.length === 0) {
         productsGrid.innerHTML = "<p class='no-results-msg'>No items found matching the selected criteria.</p>";
+        renderPaginationControls(0);
         return;
     }
 
-    productsGrid.innerHTML = filtered.map(listing => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / LISTINGS_PER_PAGE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const startIdx = (currentPage - 1) * LISTINGS_PER_PAGE;
+    const pageItems = filtered.slice(startIdx, startIdx + LISTINGS_PER_PAGE);
+
+    productsGrid.innerHTML = pageItems.map(listing => {
         const isLost       = listing.type === 'Lost';
         const displayPrice = isLost ? 'Contact for details' : `₦${Number(listing.price || 0).toLocaleString()}`;
         const img          = listing.image_url || 'https://placehold.co/400x200?text=No+Image';
@@ -572,6 +580,34 @@ function displayListings() {
             </div>
         </div>`;
     }).join('');
+
+    renderPaginationControls(totalPages);
+}
+
+function renderPaginationControls(totalPages) {
+    const container = document.getElementById('pagination-controls');
+    if (!container) return;
+
+    if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+    let html = '';
+    html += `<button type="button" class="page-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>← Prev</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+        html += `<button type="button" class="page-btn${i === currentPage ? ' page-btn-active' : ''}" data-page="${i}">${i}</button>`;
+    }
+    html += `<button type="button" class="page-btn" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>Next →</button>`;
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.page-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = parseInt(btn.dataset.page, 10);
+            if (!page || page < 1) return;
+            currentPage = page;
+            displayListings();
+            document.getElementById('featured-listings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
 }
 
 function updatePlatformStatistics() {
@@ -1247,6 +1283,13 @@ function bindAuthModal() {
     // Sign Up form
     document.getElementById('signupForm')?.addEventListener('submit', async e => {
         e.preventDefault();
+
+        // Honeypot check — a real user never sees or fills this field, so
+        // anything filling it in is almost certainly an automated bot.
+        // Silently drop the submission without revealing why (don't tip bots off).
+        const honeypot = document.getElementById('signup-website')?.value;
+        if (honeypot) { return; }
+
         const fullName      = document.getElementById('signup-name').value.trim();
         const email         = document.getElementById('signup-email').value.trim();
         const password      = document.getElementById('signup-password').value;
@@ -1344,6 +1387,7 @@ function bindListingEvents() {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
             btn.classList.add('active-tab');
             currentTab = btn.dataset.type;
+            currentPage = 1;
             displayListings();
         });
     });
@@ -1354,12 +1398,13 @@ function bindListingEvents() {
             document.querySelectorAll('#category-list li').forEach(l => l.classList.remove('active-cat'));
             li.classList.add('active-cat');
             currentCategory = li.innerText;
+            currentPage = 1;
             displayListings();
         });
     });
 
     // Search
-    searchBar?.addEventListener('input', displayListings);
+    searchBar?.addEventListener('input', () => { currentPage = 1; displayListings(); });
 
     // Hero buttons
     document.getElementById('hero-explore-btn')?.addEventListener('click', () => {
