@@ -16,15 +16,6 @@
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0f172a">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="E-Mart">
-
-  <!-- PWA -->
-  <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#0f172a">
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -437,6 +428,9 @@
   <!-- Floating Back to Top Arrow Component -->
   <button type="button" id="backToTopBtn" title="Go to top" style="display: none;">↑</button>
 
+  <!-- Install App button — shown when the browser offers installability -->
+  <button type="button" id="install-app-btn" style="display:none;">📲 Install App</button>
+
   <script src="./config.js"></script>
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <script type="module" src="./script.js"></script>
@@ -446,6 +440,30 @@
         navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW registration failed:', err));
       });
     }
+
+    // Custom Install App button — Chrome only shows its own install prompt
+    // automatically after unpredictable engagement signals, so we capture
+    // the event ourselves and offer an always-visible button instead.
+    let deferredInstallPrompt = null;
+    const installBtn = document.getElementById('install-app-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (installBtn) installBtn.style.display = 'block';
+    });
+
+    installBtn?.addEventListener('click', async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installBtn.style.display = 'none';
+    });
+
+    window.addEventListener('appinstalled', () => {
+      if (installBtn) installBtn.style.display = 'none';
+    });
   </script>
 </body>
 </html>
