@@ -137,6 +137,7 @@
   <section id="featured-listings" class="listings-container-section">
     <h2 id="listings-title">Active Campus Listings</h2>
     <div class="products-grid" id="products"></div>
+    <div id="pagination-controls" class="pagination-controls"></div>
   </section>
 
   <!-- Item Submission Upload Form Panel Drawer Frame -->
@@ -247,6 +248,12 @@
       <!-- Sign Up Panel -->
       <div id="signup-panel" style="display:none;">
         <form id="signupForm">
+          <!-- Honeypot — invisible to real users, but bots that auto-fill every
+               field will fill this too, letting us silently reject the submission. -->
+          <div style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;" aria-hidden="true">
+            <label for="signup-website">Website</label>
+            <input id="signup-website" type="text" tabindex="-1" autocomplete="off">
+          </div>
           <p class="auth-error" id="signup-error" style="display:none;"></p>
 
           <label for="signup-name">Full Name</label>
@@ -286,6 +293,9 @@
 
           <button type="submit" id="signup-submit" class="auth-submit-btn">Create Account</button>
         </form>
+        <p class="auth-helper-text" style="text-align:center; margin-top:8px;">
+          By signing up, you agree to our <a href="./terms.html" target="_blank" class="auth-link" style="display:inline; margin:0;">Terms</a> and <a href="./privacy.html" target="_blank" class="auth-link" style="display:inline; margin:0;">Privacy Policy</a>.
+        </p>
         <p class="auth-switch-msg">Already have an account?
           <a href="#" class="switch-tab-link" data-tab="signin">Sign in</a>
         </p>
@@ -411,6 +421,9 @@
         <a href="#featured-listings">Storefront Feed</a>
         <a href="#about">Our Mission</a>
         <a href="#contact">Contact Mayowa</a>
+        <a href="./terms.html">Terms of Service</a>
+        <a href="./privacy.html">Privacy Policy</a>
+        <a href="./refund.html">Refund Policy</a>
       </div>
       <div class="footer-social-column">
         <h5>Connect via Networks</h5>
