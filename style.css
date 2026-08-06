@@ -575,6 +575,29 @@ footer {
   #install-app-btn { left: 16px; bottom: 16px; padding: 10px 14px; font-size: 13px; }
 }
 
+/* --- Pagination --- */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+.page-btn {
+  background: #f1f5f9;
+  color: #334155;
+  padding: 8px 14px;
+  font-size: 13px;
+  box-shadow: none;
+}
+.page-btn:hover { background: #e2e8f0; color: #0f172a; transform: none; }
+.page-btn-active {
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  color: white;
+}
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.page-btn:disabled:hover { background: #f1f5f9; transform: none; }
+
 /* ═══════════════════════════════════════════════════════════════════════
    ADDED — Nav: Lost & Found button, Admin link, Auth button, User menu
    ═══════════════════════════════════════════════════════════════════════ */
