@@ -540,6 +540,11 @@ function displayListings() {
             ? encodeURIComponent(`Hello, I saw your ${listing.lost_or_found === 'Found' ? 'FOUND' : 'LOST'} item report for "${listing.product_name}" on Mayorcity E-Mart. I'd like to help!`)
             : '';
         const lfWaLink = `https://wa.me/${waNumber}?text=${lfMsgText}`;
+
+        const marketMsgText = !isLost
+            ? encodeURIComponent(`Hello, I'm interested in your "${listing.product_name}" listing on Mayorcity E-Mart (${displayPrice}). Is it still available?`)
+            : '';
+        const marketWaLink = `https://wa.me/${waNumber}?text=${marketMsgText}`;
         const locationText = listing.location ? `📍 ${listing.location}` : '';
         const dateText = listing.date_lost_found ? `📅 ${formatDate(listing.date_lost_found)}` : '';
 
@@ -559,7 +564,7 @@ function displayListings() {
             </div>
             <div class="card-actions">
                 <button type="button" class="view-btn" data-id="${listing.id}">View Details</button>
-                ${isLost ? `<a href="${lfWaLink}" target="_blank" rel="noopener noreferrer" class="card-wa-btn">💬 WhatsApp</a>` : ''}
+                <a href="${isLost ? lfWaLink : marketWaLink}" target="_blank" rel="noopener noreferrer" class="card-wa-btn">💬 WhatsApp ${isLost ? '' : 'Seller'}</a>
                 <div class="card-secondary-actions">
                     ${showEdit   ? `<button type="button" class="edit-btn"   data-id="${listing.id}">Edit</button>`   : ''}
                     ${showDelete ? `<button type="button" class="delete-btn" data-id="${listing.id}">Delete</button>` : ''}
