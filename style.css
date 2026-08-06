@@ -871,6 +871,67 @@ footer {
 /* ═══════════════════════════════════════════════════════════════════════
    ADDED — View Details modal content (built dynamically by script.js)
    ═══════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   ADDED — View Details modal layout & image sizing
+   (was completely unstyled before — images rendered at raw pixel size)
+   ═══════════════════════════════════════════════════════════════════════ */
+.vm-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.vm-image-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+.vm-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.vm-badges-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.vm-content { width: 100%; }
+.vm-title { font-size: 20px; margin-bottom: 10px; color: #0f172a; }
+.vm-info-card {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.vm-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+.vm-info-row:last-child { border-bottom: none; }
+.vm-info-label { color: #64748b; font-weight: 600; }
+.vm-info-value { color: #0f172a; font-weight: 700; text-align: right; }
+.vm-price { color: #1d4ed8; font-size: 15px; }
+.vm-found-label { color: #166534; }
+.vm-lost-label { color: #991b1b; }
+
+@media (min-width: 640px) {
+  .vm-layout { flex-direction: row; align-items: flex-start; }
+  .vm-image-wrap { width: 45%; flex-shrink: 0; }
+  .vm-image { max-height: 280px; }
+}
+
 .vm-admin-btn { width: 100%; margin-top: 8px; font-size: 13px; }
 .vm-admin-hide { background: #f59e0b; }
 .vm-admin-sold { background: #64748b; }
