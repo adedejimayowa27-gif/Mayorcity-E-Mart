@@ -318,11 +318,13 @@ async function handleForgotPassword(email) {
 function updateAuthUI() {
     const authBtn   = document.getElementById('auth-open-btn');
     const userMenu  = document.getElementById('user-menu');
+    const notifMenu = document.getElementById('notif-menu');
     const adminLink = document.getElementById('nav-admin-link');
 
     if (currentUser) {
         if (authBtn)  authBtn.style.display   = 'none';
         if (userMenu) userMenu.style.display  = '';
+        if (notifMenu) notifMenu.style.display = '';
 
         const name  = currentProfile?.full_name || currentUser.email;
         const email = currentUser.email;
@@ -358,6 +360,7 @@ function updateAuthUI() {
     } else {
         if (authBtn)  authBtn.style.display   = '';
         if (userMenu) userMenu.style.display  = 'none';
+        if (notifMenu) notifMenu.style.display = 'none';
         if (adminControlBar) adminControlBar.style.display = 'none';
         if (adminLink) adminLink.style.display = 'none';
         if (idUploadBanner) idUploadBanner.style.display = 'none';
@@ -783,7 +786,7 @@ async function openViewModal(id) {
     const avgRating     = profile?.rating_count ? (profile.rating_sum / profile.rating_count).toFixed(1) : null;
 
     const isOwner    = currentUser && listing.user_id === currentUser.id;
-    const canSold    = isStaff() && listing.status === 'Active';
+    const canSold    = (isStaff() || isOwner) && listing.status === 'Active';
     const canHide    = isStaff() && listing.status === 'Active';
     const canRestore = isStaff() && listing.status === 'Hidden';
 
@@ -1540,12 +1543,244 @@ document.addEventListener('keydown', e => {
 // ═══════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════
+let notifChannel = null;
+let notifications = [];
+
+async function loadNotifications() {
+    if (!currentUser) { notifications = []; renderNotifications(); return; }
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+    if (!error) notifications = data || [];
+    renderNotifications();
+}
+
+function renderNotifications() {
+    const badge = document.getElementById('notif-badge');
+    const list  = document.getElementById('notif-list');
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+
+    if (badge) {
+        if (unreadCount > 0) { badge.textContent = unreadCount > 9 ? '9+' : String(unreadCount); badge.style.display = 'flex'; }
+        else { badge.style.display = 'none'; }
+    }
+
+    if (!list) return;
+    if (!notifications.length) {
+        list.innerHTML = `<p class="admin-empty-msg" style="padding:16px;">No notifications yet.</p>`;
+        return;
+    }
+    list.innerHTML = notifications.map(n => `
+        <div class="notif-item ${n.is_read ? '' : 'notif-item-unread'}" data-id="${n.id}">
+            <p class="notif-item-title">${escapeHtml(n.title)}</p>
+            ${n.message ? `<p class="notif-item-msg">${escapeHtml(n.message)}</p>` : ''}
+            <p class="notif-item-time">${formatRelativeTime(n.created_at)}</p>
+        </div>
+    `).join('');
+}
+
+async function markAllNotificationsRead() {
+    if (!currentUser) return;
+    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+    if (!unreadIds.length) return;
+    notifications = notifications.map(n => ({ ...n, is_read: true }));
+    renderNotifications();
+    await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
+}
+
+function subscribeToNotifications() {
+    if (!currentUser || notifChannel) return;
+    notifChannel = supabase
+        .channel(`notifications-${currentUser.id}`)
+        .on('postgres_changes', {
+            event: 'INSERT', schema: 'public', table: 'notifications',
+            filter: `user_id=eq.${currentUser.id}`
+        }, payload => {
+            notifications = [payload.new, ...notifications];
+            renderNotifications();
+            showToast(payload.new.title, payload.new.type || 'info');
+        })
+        .subscribe();
+}
+
+function unsubscribeFromNotifications() {
+    if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
+    notifications = [];
+    renderNotifications();
+}
+
+function formatRelativeTime(isoString) {
+    const diffMs = Date.now() - new Date(isoString).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days}d ago`;
+    return formatDate(isoString);
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+function bindNotifications() {
+    const bellBtn  = document.getElementById('notif-bell-btn');
+    const dropdown = document.getElementById('notif-dropdown');
+
+    bellBtn?.addEventListener('click', e => {
+        e.stopPropagation();
+        dropdown?.classList.toggle('open');
+    });
+    document.addEventListener('click', e => {
+        if (dropdown?.classList.contains('open') && !e.target.closest('#notif-menu')) {
+            dropdown.classList.remove('open');
+        }
+    });
+    document.getElementById('notif-mark-all-read')?.addEventListener('click', markAllNotificationsRead);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SELLER DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════
+let dashboardListings = [];
+let dashboardStatusFilter = 'Active';
+
+async function openDashboard() {
+    if (!currentUser) return;
+    const modal = document.getElementById('dashboardModal');
+    if (modal) modal.style.display = 'flex';
+
+    const listEl = document.getElementById('dash-listings-list');
+    if (listEl) listEl.innerHTML = `<p class="admin-empty-msg">Loading your listings…</p>`;
+
+    const { data, error } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        if (listEl) listEl.innerHTML = `<p class="admin-empty-msg">Error loading listings: ${escapeHtml(error.message)}</p>`;
+        return;
+    }
+
+    dashboardListings = data || [];
+    document.getElementById('dash-active-count').textContent = dashboardListings.filter(l => l.status === 'Active').length;
+    document.getElementById('dash-sold-count').textContent   = dashboardListings.filter(l => l.status === 'Sold').length;
+    document.getElementById('dash-hidden-count').textContent = dashboardListings.filter(l => l.status === 'Hidden').length;
+    document.getElementById('dash-rating').textContent = currentProfile?.rating_count
+        ? (currentProfile.rating_sum / currentProfile.rating_count).toFixed(1) + ' ★'
+        : '—';
+
+    renderDashboardList();
+}
+
+function renderDashboardList() {
+    const listEl = document.getElementById('dash-listings-list');
+    if (!listEl) return;
+
+    const filtered = dashboardListings.filter(l => l.status === dashboardStatusFilter);
+    if (!filtered.length) {
+        listEl.innerHTML = `<p class="admin-empty-msg">No ${dashboardStatusFilter.toLowerCase()} listings.</p>`;
+        return;
+    }
+
+    listEl.innerHTML = filtered.map(l => `
+        <div class="dash-listing-row" data-id="${l.id}">
+            <img src="${l.image_url || ''}" alt="" class="dash-listing-thumb" onerror="this.style.display='none'">
+            <div class="dash-listing-info">
+                <p class="dash-listing-name">${escapeHtml(l.product_name)}</p>
+                <p class="dash-listing-meta">${l.type === 'Market' ? '₦' + Number(l.price || 0).toLocaleString() : l.type} • ${formatDate(l.created_at)}</p>
+            </div>
+            <div class="dash-listing-actions">
+                ${l.status === 'Active' ? `<button type="button" class="dash-sold-btn" data-id="${l.id}">${l.type === 'Market' ? 'Mark Sold' : 'Mark Resolved'}</button>` : ''}
+                <button type="button" class="dash-edit-btn" data-id="${l.id}">Edit</button>
+                <button type="button" class="dash-delete-btn" data-id="${l.id}">Delete</button>
+            </div>
+        </div>
+    `).join('');
+
+    listEl.querySelectorAll('.dash-sold-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            const listing = dashboardListings.find(l => l.id === id);
+            const ok = await showConfirm({
+                title: 'Mark as Sold',
+                message: `Mark "<strong>${escapeHtml(listing?.product_name || '')}</strong>" as sold?`,
+                confirmText: 'Confirm', iconType: 'success', confirmStyle: 'primary'
+            });
+            if (!ok) return;
+            await updateListing(id, { status: 'Sold' });
+            showToast('Marked as sold.', 'success');
+            await openDashboard();
+            await loadListings();
+        });
+    });
+
+    listEl.querySelectorAll('.dash-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('dashboardModal').style.display = 'none';
+            openEditModal(btn.dataset.id);
+        });
+    });
+
+    listEl.querySelectorAll('.dash-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            const listing = dashboardListings.find(l => l.id === id);
+            const ok = await showConfirm({
+                title: 'Delete Listing',
+                message: `Permanently delete "<strong>${escapeHtml(listing?.product_name || '')}</strong>"? This can't be undone.`,
+                confirmText: 'Delete', iconType: 'danger', confirmStyle: 'danger'
+            });
+            if (!ok) return;
+            await deleteListing(id);
+            showToast('Listing deleted.', 'success');
+            await openDashboard();
+            await loadListings();
+        });
+    });
+}
+
+function bindDashboard() {
+    document.getElementById('open-dashboard-btn')?.addEventListener('click', () => {
+        document.getElementById('user-dropdown')?.classList.remove('open');
+        openDashboard();
+    });
+    document.getElementById('closeDashboardModal')?.addEventListener('click', () => {
+        document.getElementById('dashboardModal').style.display = 'none';
+    });
+    document.getElementById('dashboardModal')?.addEventListener('click', e => {
+        if (e.target.id === 'dashboardModal') e.target.style.display = 'none';
+    });
+    document.querySelectorAll('.dash-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            dashboardStatusFilter = tab.dataset.status;
+            renderDashboardList();
+        });
+    });
+}
+
 async function init() {
     bindAuthModal();
     bindIdUploadModal();
     bindListingEvents();
     bindLfModal();
     bindBackToTop();
+    bindNotifications();
+    bindDashboard();
 
     if (!SUPABASE_CONFIGURED) {
         showToast(
@@ -1565,8 +1800,11 @@ async function init() {
         currentUser = session?.user || null;
         if (currentUser) {
             await loadCurrentProfile(currentUser.id);
+            await loadNotifications();
+            subscribeToNotifications();
         } else {
             currentProfile = null;
+            unsubscribeFromNotifications();
         }
         updateAuthUI();
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
