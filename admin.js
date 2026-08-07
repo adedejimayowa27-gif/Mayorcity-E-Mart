@@ -199,15 +199,34 @@ async function loadVerification() {
         return;
     }
 
+    // student-ids is a PRIVATE bucket, so the stored value is just a storage
+    // path (e.g. "userId/student-id.jpg"), not a directly-loadable URL.
+    // Generate a short-lived signed URL per row before rendering so the
+    // thumbnail and preview modal actually display the image.
+    const signedUrls = await Promise.all(data.map(async v => {
+        if (!v.student_id_url) return null;
+        try {
+            const { data: signed, error: signErr } = await supabase.storage
+                .from('student-ids')
+                .createSignedUrl(v.student_id_url, 3600); // 1 hour
+            if (signErr) return null;
+            return signed?.signedUrl || null;
+        } catch (_) { return null; }
+    }));
+
     if (listEl) {
-        listEl.innerHTML = data.map(v => `
+        listEl.innerHTML = data.map((v, i) => {
+            const signedUrl = signedUrls[i];
+            return `
             <div class="verif-card" data-id="${esc(v.id)}" data-user-id="${esc(v.user_id)}">
                 <div class="verif-id-section">
-                    ${v.student_id_url
-                        ? `<img src="${esc(v.student_id_url)}" alt="Student ID"
-                               class="verif-id-thumb" data-src="${esc(v.student_id_url)}"
+                    ${signedUrl
+                        ? `<img src="${esc(signedUrl)}" alt="Student ID"
+                               class="verif-id-thumb" data-src="${esc(signedUrl)}"
                                data-name="${esc(v.full_name)}">`
-                        : `<div class="verif-no-id">No ID uploaded</div>`}
+                        : v.student_id_url
+                            ? `<div class="verif-no-id">ID on file — preview unavailable</div>`
+                            : `<div class="verif-no-id">No ID uploaded</div>`}
                 </div>
                 <div class="verif-details">
                     <h4 class="verif-name">${esc(v.full_name)}</h4>
@@ -257,6 +276,14 @@ async function loadVerification() {
     }
 }
 
+// Sends an in-app notification to a user. Non-fatal if it fails — never
+// blocks the actual admin action (approving/hiding/etc.) on this succeeding.
+async function notifyUser(userId, title, message, type = 'info') {
+    try {
+        await supabase.from('notifications').insert({ user_id: userId, title, message, type });
+    } catch (_) { /* non-fatal */ }
+}
+
 async function approveVerification(verifId, userId, name) {
     const ok = await showConfirm({
         title:       'Approve Verification',
@@ -273,6 +300,7 @@ async function approveVerification(verifId, userId, name) {
     if (r1.error || r2.error) { showToast('Failed to approve: ' + (r1.error?.message || r2.error?.message), 'error'); return; }
 
     await logAction('APPROVE_VERIFICATION', 'user', userId, { name, verif_id: verifId });
+    await notifyUser(userId, '✅ You\'re verified!', 'Your student ID has been approved. You can now post listings on Mayorcity E-Mart.', 'success');
     showToast(`${name} is now Verified.`, 'success');
     await loadOverview();
     loadVerification();
@@ -315,6 +343,7 @@ async function rejectVerification(verifId, userId, name) {
     if (r1.error || r2.error) { showToast('Failed to reject: ' + (r1.error?.message || r2.error?.message), 'error'); return; }
 
     await logAction('REJECT_VERIFICATION', 'user', userId, { name, note, verif_id: verifId });
+    await notifyUser(userId, '❌ Verification rejected', `Reason: ${note}. You can upload a new Student ID photo and it will be reviewed again.`, 'error');
     showToast(`${name}'s verification rejected.`, 'warning');
     await loadOverview();
     loadVerification();
@@ -536,6 +565,14 @@ async function changeListingStatus(id, name, status) {
     const { error } = await supabase.from('listings').update({ status }).eq('id', id);
     if (error) { showToast('Failed: ' + error.message, 'error'); return; }
     await logAction(`LISTING_${status.toUpperCase()}`, 'listing', id, { name });
+
+    if (status === 'Hidden') {
+        const owner = allListings.find(l => l.id === id)?.user_id;
+        if (owner) {
+            await notifyUser(owner, '🙈 Listing hidden', `Your listing "${name}" was hidden by an admin. Contact support if you think this was a mistake.`, 'warning');
+        }
+    }
+
     showToast(`Listing "${name}" set to ${status}.`, 'success');
     allListings = allListings.map(l => l.id === id ? { ...l, status } : l);
     renderListings();
