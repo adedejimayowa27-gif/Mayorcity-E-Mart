@@ -44,6 +44,22 @@
         <button type="button" id="auth-open-btn" class="auth-open-btn">Sign In</button>
 
         <!-- Signed-in state (hidden until auth confirmed) -->
+        <!-- Notifications bell (hidden until signed in) -->
+        <div id="notif-menu" class="notif-menu" style="display:none;">
+          <button type="button" id="notif-bell-btn" class="notif-bell-btn" aria-haspopup="true" aria-expanded="false">
+            🔔<span id="notif-badge" class="notif-badge" style="display:none;">0</span>
+          </button>
+          <div id="notif-dropdown" class="notif-dropdown">
+            <div class="notif-dropdown-header">
+              <p class="notif-dropdown-title">Notifications</p>
+              <button type="button" id="notif-mark-all-read" class="notif-mark-all-btn">Mark all read</button>
+            </div>
+            <div id="notif-list" class="notif-list">
+              <p class="admin-empty-msg" style="padding:16px;">No notifications yet.</p>
+            </div>
+          </div>
+        </div>
+
         <div id="user-menu" class="user-menu" style="display:none;">
           <button type="button" id="user-menu-btn" class="user-menu-btn" aria-haspopup="true" aria-expanded="false">
             <span class="user-avatar-initials" id="user-initials">?</span>
@@ -54,6 +70,7 @@
             <p class="user-dropdown-name" id="user-dropdown-name"></p>
             <p class="user-dropdown-email" id="user-dropdown-email"></p>
             <hr>
+            <button type="button" id="open-dashboard-btn" class="user-dropdown-link">📊 My Dashboard</button>
             <button type="button" id="signout-btn" class="user-dropdown-signout">Sign Out</button>
           </div>
         </div>
@@ -128,6 +145,7 @@
         <li class="category-item">Fashion</li>
         <li class="category-item">Books & Study Materials</li>
         <li class="category-item">Hostel Items</li>
+        <li class="category-item">Services</li>
         <li class="category-item">Other Items</li>
       </ul>
     </div>
@@ -164,6 +182,7 @@
         <option>Fashion</option>
         <option>Books & Study Materials</option>
         <option>Hostel Items</option>
+        <option>Services</option>
         <option>Other Items</option>
       </select>
 
@@ -343,6 +362,7 @@
           <option>Fashion</option>
           <option>Books & Study Materials</option>
           <option>Hostel Items</option>
+          <option>Services</option>
           <option>Other Items</option>
         </select>
 
@@ -382,6 +402,43 @@
         <input id="id-upload-file" type="file" accept="image/*" required>
         <button type="submit" id="id-upload-submit" class="auth-submit-btn">Upload ID</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Seller Dashboard -->
+  <div id="dashboardModal" class="modal-overlay">
+    <div class="modal-box large-modal-box">
+      <span class="modal-close" id="closeDashboardModal">&times;</span>
+      <h3>📊 My Dashboard</h3>
+
+      <div class="dash-stats-grid">
+        <div class="dash-stat-card">
+          <p class="dash-stat-label">Active</p>
+          <h2 class="dash-stat-value" id="dash-active-count">0</h2>
+        </div>
+        <div class="dash-stat-card dash-stat-sold">
+          <p class="dash-stat-label">Sold</p>
+          <h2 class="dash-stat-value" id="dash-sold-count">0</h2>
+        </div>
+        <div class="dash-stat-card dash-stat-hidden">
+          <p class="dash-stat-label">Hidden</p>
+          <h2 class="dash-stat-value" id="dash-hidden-count">0</h2>
+        </div>
+        <div class="dash-stat-card">
+          <p class="dash-stat-label">Rating</p>
+          <h2 class="dash-stat-value" id="dash-rating">—</h2>
+        </div>
+      </div>
+
+      <div class="dash-tabs-row">
+        <button type="button" class="dash-tab active" data-status="Active">Active</button>
+        <button type="button" class="dash-tab" data-status="Sold">Sold</button>
+        <button type="button" class="dash-tab" data-status="Hidden">Hidden</button>
+      </div>
+
+      <div id="dash-listings-list" class="dash-listings-list">
+        <p class="admin-empty-msg">Loading your listings…</p>
+      </div>
     </div>
   </div>
 
