@@ -1,12 +1,85 @@
 // ═══════════════════════════════════════════════════════════════════════
 // Mayorcity E-Mart — Admin Dashboard (ES Module)
 // ═══════════════════════════════════════════════════════════════════════
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// The Supabase client is downloaded at runtime. If the first CDN is blocked,
+// down, or slow, fall through to the next one — a failed download used to
+// leave the page stuck on "Verifying access…" forever.
+const SUPABASE_CDNS = [
+    'https://esm.sh/@supabase/supabase-js@2',
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm',
+    'https://esm.run/@supabase/supabase-js@2'
+];
+
+// Every network step in the auth gate gets a deadline so it can fail loudly
+// instead of hanging.
+function withTimeout(promise, ms, label) {
+    let timer;
+    return Promise.race([
+        Promise.resolve(promise).finally(() => clearTimeout(timer)),
+        new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+        })
+    ]);
+}
+
+function describeError(err) {
+    if (!err) return '';
+    return err.message || err.error_description || String(err);
+}
+
+// Renders the access/error screen. Falls back to a plain alert-free reload
+// prompt if the inline helper in admin.html is somehow missing.
+function gate(opts) {
+    window.__adminGateResolved = true;
+    if (typeof window.adminGate === 'function') { window.adminGate(opts); return; }
+    const loading = document.getElementById('admin-loading');
+    const denied  = document.getElementById('access-denied');
+    if (loading) loading.style.display = 'none';
+    if (denied)  denied.style.display  = 'flex';
+}
+
+function setLoadingMessage(text) {
+    const el = document.getElementById('admin-loading-msg');
+    if (el) el.textContent = text;
+}
+
+async function loadCreateClient() {
+    let lastError = null;
+    for (const url of SUPABASE_CDNS) {
+        try {
+            const mod = await withTimeout(import(url), 8000, 'Supabase client download');
+            if (mod?.createClient) return mod.createClient;
+            lastError = new Error('Supabase client module loaded without createClient.');
+        } catch (err) {
+            lastError = err;
+        }
+    }
+    throw lastError || new Error('Could not download the Supabase client.');
+}
 
 const SUPABASE_CONFIGURED = !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY);
-const supabase = SUPABASE_CONFIGURED
-    ? createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY)
-    : null;
+
+let supabase  = null;
+let bootError = null;
+
+if (SUPABASE_CONFIGURED) {
+    try {
+        const createClient = await loadCreateClient();
+        supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {
+            auth: {
+                persistSession:   true,
+                autoRefreshToken: true,
+                // This is a single-page console, so run auth work directly rather
+                // than through the Web Locks API, which can stay pending and make
+                // getSession() never resolve when another tab holds the lock.
+                lock: async (_name, _acquireTimeout, fn) => await fn()
+            }
+        });
+    } catch (err) {
+        bootError = err;
+    }
+}
 
 let currentUser    = null;
 let currentProfile = null;
@@ -250,7 +323,8 @@ async function loadVerification() {
                         ✕ Reject
                     </button>
                 </div>` : ''}
-            </div>`).join('');
+            </div>`;
+        }).join('');
 
         // ID image preview
         listEl.querySelectorAll('.verif-id-thumb').forEach(img => {
@@ -738,46 +812,129 @@ document.getElementById('id-preview-modal')?.addEventListener('click', e => {
 async function init() {
     const loadingEl = document.getElementById('admin-loading');
     const contentEl = document.getElementById('admin-content');
-    const deniedEl  = document.getElementById('access-denied');
 
     // Guard: Supabase must be configured before anything else
     if (!SUPABASE_CONFIGURED) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (deniedEl) {
-            deniedEl.style.display = 'flex';
-            const msgEl = deniedEl.querySelector('p') || deniedEl;
-            if (msgEl) msgEl.textContent = 'Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY as Replit Secrets and restart the workflow.';
+        gate({
+            icon:    '⚙️',
+            title:   'Dashboard not configured',
+            message: 'Supabase credentials are missing, so access cannot be verified.',
+            detail:  'Set SUPABASE_URL and SUPABASE_ANON_KEY in the site environment variables, then redeploy.'
+        });
+        return;
+    }
+
+    // Guard: the Supabase client itself failed to download
+    if (!supabase) {
+        gate({
+            icon:    '⚠️',
+            title:   'Could not load the dashboard',
+            message: 'The Supabase client could not be downloaded from any CDN.',
+            detail:  `${describeError(bootError)} — check your internet connection, then try again.`,
+            retry:   true
+        });
+        return;
+    }
+
+    // ── Session ─────────────────────────────────────────────────────────
+    setLoadingMessage('Checking your session…');
+
+    let sessionUser = null;
+    let sessionError = null;
+
+    try {
+        const { data, error } = await withTimeout(supabase.auth.getSession(), 10000, 'Session check');
+        if (error) throw error;
+        sessionUser = data?.session?.user || null;
+    } catch (err) {
+        sessionError = err;
+        // A stale cached token can make getSession() fail even when the network
+        // is fine, so confirm against the server before giving up.
+        try {
+            const { data, error } = await withTimeout(supabase.auth.getUser(), 10000, 'Account lookup');
+            if (error) throw error;
+            sessionUser  = data?.user || null;
+            sessionError = null;
+        } catch (err2) {
+            sessionError = err2;
         }
+    }
+
+    if (sessionError) {
+        gate({
+            icon:    '⚠️',
+            title:   'Could not verify access',
+            message: 'Your sign-in status could not be confirmed.',
+            detail:  `${describeError(sessionError)} — check your connection and try again, or sign in again from the marketplace.`,
+            retry:   true,
+            signIn:  true
+        });
         return;
     }
 
-    // Wait for auth state
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session?.user) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (deniedEl)  deniedEl.style.display  = 'flex';
+    if (!sessionUser) {
+        gate({
+            icon:    '🔒',
+            title:   'Sign in required',
+            message: 'Sign in with an administrator account to open this dashboard.',
+            signIn:  true
+        });
         return;
     }
 
-    currentUser = session.user;
+    currentUser = sessionUser;
 
-    // Load profile and check role
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', currentUser.id)
-        .single();
+    // ── Profile and role check ──────────────────────────────────────────
+    setLoadingMessage('Loading your permissions…');
+
+    let profile = null;
+    try {
+        const { data, error } = await withTimeout(
+            supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle(),
+            12000,
+            'Permission check'
+        );
+        if (error) throw error;
+        profile = data;
+    } catch (err) {
+        gate({
+            icon:    '⚠️',
+            title:   'Could not load your permissions',
+            message: 'You are signed in, but your admin profile could not be read.',
+            detail:  `${describeError(err)} — try again in a moment.`,
+            retry:   true
+        });
+        return;
+    }
 
     currentProfile = profile;
 
     if (!profile || !['admin', 'moderator'].includes(profile.role)) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (deniedEl)  deniedEl.style.display  = 'flex';
+        const email    = currentUser.email || 'unknown account';
+        const expected = window.ADMIN_EMAIL && currentUser.email &&
+            currentUser.email.toLowerCase() === String(window.ADMIN_EMAIL).toLowerCase();
+
+        let detail;
+        if (!profile) {
+            detail = `Signed in as ${email}, but no profile record exists for this account yet.`;
+        } else if (expected) {
+            detail = `Signed in as ${email} with the role "${profile.role}". Set this account's role to "admin" in the profiles table to unlock the dashboard.`;
+        } else {
+            detail = `Signed in as ${email} with the role "${profile.role}".`;
+        }
+
+        gate({
+            icon:    '🔒',
+            title:   'Access Restricted',
+            message: 'This dashboard is only available to administrators and moderators.',
+            detail,
+            signIn:  true
+        });
         return;
     }
 
     // Show dashboard
+    window.__adminGateResolved = true;
     if (loadingEl) loadingEl.style.display = 'none';
     if (contentEl) contentEl.style.display = '';
 
@@ -821,4 +978,19 @@ async function init() {
     await loadOverview();
 }
 
-init();
+init().catch(err => {
+    console.error('[admin] init failed:', err);
+    // If the dashboard is already on screen, a late failure is just a data
+    // problem — don't blank out a working page over it.
+    if (window.__adminGateResolved) {
+        showToast(`Could not load dashboard data: ${describeError(err)}`, 'error', 7000);
+        return;
+    }
+    gate({
+        icon:    '⚠️',
+        title:   'Something went wrong',
+        message: 'The dashboard could not finish loading.',
+        detail:  `${describeError(err)} — try again.`,
+        retry:   true
+    });
+});

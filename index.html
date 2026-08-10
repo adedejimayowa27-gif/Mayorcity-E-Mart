@@ -37,6 +37,7 @@
         <a href="#featured-listings" class="nav-link active">Home</a>
         <a href="#about" class="nav-link">About Us</a>
         <a href="#contact" class="nav-link">Contact Hub</a>
+        <button type="button" id="nav-post-btn" class="nav-post-btn">➕ Post an Item</button>
         <button type="button" id="nav-lf-btn" class="nav-lf-btn">🔎 Lost &amp; Found</button>
         <a href="./admin.html" id="nav-admin-link" class="nav-admin-link" style="display:none;">🔐 Admin</a>
 
@@ -102,10 +103,11 @@
     <h2>Buy. Sell. Find.</h2>
     <p>A safe, moderated, and professional campus environment connecting students with trusted buyers and sellers while helping lost property find its rightful owner.</p>
     <div class="hero-cta-buttons">
-      <button id="hero-explore-btn">Explore Marketplace</button>
-      <button id="hero-post-btn" class="secondary-btn">Post a New Item</button>
+      <button id="hero-post-btn" class="hero-primary-cta">➕ Post an Item — Start Selling</button>
+      <button id="hero-explore-btn" class="secondary-btn">Explore Marketplace</button>
       <button id="hero-lf-btn" class="secondary-btn">Report Lost &amp; Found</button>
     </div>
+    <p class="hero-cta-hint">Got something to sell? Posting takes less than a minute.</p>
   </section>
 
   <!-- Staff/Admin banner (shown for admins & moderators once signed in) -->
@@ -154,7 +156,10 @@
 
   <!-- Dynamic Product Grid Layout Output Context -->
   <section id="featured-listings" class="listings-container-section">
-    <h2 id="listings-title">Active Campus Listings</h2>
+    <div class="listings-header-row">
+      <h2 id="listings-title">Active Campus Listings</h2>
+      <button type="button" id="listings-post-btn" class="listings-post-btn">➕ Post an Item</button>
+    </div>
     <div class="products-grid" id="products"></div>
     <div id="pagination-controls" class="pagination-controls"></div>
   </section>
@@ -495,6 +500,11 @@
       <p>&copy; 2026 Mayorcity E-Mart. Founded by Adedeji Mayowa. All Rights Reserved.</p>
     </div>
   </footer>
+
+  <!-- Floating Post an Item action — always-visible way to start a listing -->
+  <button type="button" id="fab-post-btn" class="fab-post-btn" title="Post an item for sale">
+    <span class="fab-post-icon">➕</span><span class="fab-post-label">Post an Item</span>
+  </button>
 
   <!-- Floating Back to Top Arrow Component -->
   <button type="button" id="backToTopBtn" title="Go to top" style="display: none;">↑</button>

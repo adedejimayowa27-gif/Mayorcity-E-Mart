@@ -1175,6 +1175,12 @@ function bindLfModal() {
 // ═══════════════════════════════════════════════════════════════════════
 // POST FORM
 // ═══════════════════════════════════════════════════════════════════════
+// Floating post button is redundant while the form is on screen.
+function setFabVisible(visible) {
+    const fab = document.getElementById('fab-post-btn');
+    if (fab) fab.style.display = visible ? '' : 'none';
+}
+
 function showPostForm() {
     if (!currentUser) { openAuthModal('signin'); showToast('Please sign in to post a listing.', 'info'); return; }
     if (!canPost()) {
@@ -1184,6 +1190,7 @@ function showPostForm() {
     if (uploadFormSection) {
         uploadFormSection.style.display = 'block';
         uploadFormSection.scrollIntoView({ behavior: 'smooth' });
+        setFabVisible(false);
     }
 }
 
@@ -1429,6 +1436,11 @@ function bindListingEvents() {
     document.getElementById('hero-post-btn')?.addEventListener('click', showPostForm);
     document.getElementById('hero-lf-btn')?.addEventListener('click', openLfModal);
 
+    // Every "Post an Item" entry point opens the same form
+    document.getElementById('nav-post-btn')?.addEventListener('click', showPostForm);
+    document.getElementById('listings-post-btn')?.addEventListener('click', showPostForm);
+    document.getElementById('fab-post-btn')?.addEventListener('click', showPostForm);
+
     // Nav Lost & Found button
     document.getElementById('nav-lf-btn')?.addEventListener('click', () => {
         openLfModal();
@@ -1437,6 +1449,7 @@ function bindListingEvents() {
     // Hide post form
     document.getElementById('hide-form-btn')?.addEventListener('click', () => {
         if (uploadFormSection) uploadFormSection.style.display = 'none';
+        setFabVisible(true);
     });
 
     // Listing type toggle (hide price for Lost & Found)
@@ -1476,6 +1489,7 @@ function bindListingEvents() {
 
             document.getElementById('postForm').reset();
             if (uploadFormSection) uploadFormSection.style.display = 'none';
+            setFabVisible(true);
             showToast('Listing published successfully!', 'success');
             await loadListings();
         } catch (err) {
@@ -1858,6 +1872,8 @@ async function init() {
     bindNotifications();
     bindDashboard();
 
+    let wantsSignInPrompt = new URLSearchParams(window.location.search).get('signin') === '1';
+
     if (!SUPABASE_CONFIGURED) {
         showToast(
             'Supabase is not connected yet. Add SUPABASE_URL and SUPABASE_ANON_KEY as Replit Secrets, then restart the workflow.',
@@ -1886,6 +1902,13 @@ async function init() {
         updateAuthUI();
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
             await loadListings();
+        }
+        // ?signin=1 (used by the admin dashboard's "Sign in" link) opens the
+        // sign-in modal once we know nobody is signed in yet.
+        if (wantsSignInPrompt && event === 'INITIAL_SESSION') {
+            wantsSignInPrompt = false;
+            if (!currentUser) openAuthModal('signin');
+            history.replaceState(null, '', window.location.pathname + window.location.hash);
         }
     });
 }

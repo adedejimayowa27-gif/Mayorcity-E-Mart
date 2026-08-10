@@ -50,20 +50,25 @@
   <!-- Main content -->
   <main class="admin-main" id="admin-main">
 
-    <!-- Access denied (shown while checking auth) -->
+    <!-- Access gate — shown when access is denied or verification fails -->
     <div id="access-denied" class="admin-access-denied" style="display:none;">
       <div class="access-denied-box">
-        <p class="access-icon">🔒</p>
-        <h2>Access Restricted</h2>
-        <p>This page is only accessible to administrators.</p>
-        <a href="./index.html" class="access-back-btn">← Go to Marketplace</a>
+        <p class="access-icon" id="access-icon">🔒</p>
+        <h2 id="access-title">Access Restricted</h2>
+        <p id="access-message">This page is only accessible to administrators.</p>
+        <p class="access-detail" id="access-detail" style="display:none;"></p>
+        <div class="access-actions">
+          <button type="button" id="access-retry-btn" class="access-back-btn" style="display:none;">↻ Try again</button>
+          <a href="./index.html?signin=1" id="access-signin-link" class="access-back-btn" style="display:none;">Sign in</a>
+          <a href="./index.html" class="access-back-btn access-back-muted">← Go to Marketplace</a>
+        </div>
       </div>
     </div>
 
     <!-- Loading state -->
     <div id="admin-loading" class="admin-page-loading">
       <div class="loading-spinner"></div>
-      <p>Verifying access…</p>
+      <p id="admin-loading-msg">Verifying access…</p>
     </div>
 
     <!-- Dashboard content (hidden until auth confirmed) -->
@@ -274,6 +279,60 @@
       <p id="id-preview-name" style="margin-top:12px;font-weight:700;"></p>
     </div>
   </div>
+
+  <script>
+  // ─── Access gate UI ──────────────────────────────────────────────────────
+  // Written as a plain script (not a module) so the page can always explain
+  // itself, even when admin.js never loads — e.g. the CDN that serves the
+  // Supabase client is blocked or offline. admin.js calls window.adminGate().
+  (function () {
+    var el = function (id) { return document.getElementById(id); };
+
+    window.adminGate = function (opts) {
+      opts = opts || {};
+      window.__adminGateResolved = true;
+
+      var loading = el('admin-loading');
+      var box     = el('access-denied');
+      if (loading) loading.style.display = 'none';
+      if (!box) return;
+
+      if (opts.icon)    el('access-icon').textContent    = opts.icon;
+      if (opts.title)   el('access-title').textContent   = opts.title;
+      if (opts.message) el('access-message').textContent = opts.message;
+
+      var detail = el('access-detail');
+      if (detail) {
+        detail.textContent   = opts.detail || '';
+        detail.style.display = opts.detail ? 'block' : 'none';
+      }
+
+      var retry = el('access-retry-btn');
+      if (retry) {
+        retry.style.display = opts.retry ? 'inline-block' : 'none';
+        retry.onclick = function () { window.location.reload(); };
+      }
+
+      var signin = el('access-signin-link');
+      if (signin) signin.style.display = opts.signIn ? 'inline-block' : 'none';
+
+      box.style.display = 'flex';
+    };
+
+    // Watchdog: never leave the user staring at "Verifying access…" forever.
+    setTimeout(function () {
+      if (window.__adminGateResolved) return;
+      window.adminGate({
+        icon: '⚠️',
+        title: 'Could not verify access',
+        message: 'The dashboard took too long to load.',
+        detail: 'This is usually a connection problem. Check your internet and try again — if it keeps failing, sign in again from the marketplace.',
+        retry: true,
+        signIn: true
+      });
+    }, 12000);
+  })();
+  </script>
 
   <script src="./config.js"></script>
   <script type="module" src="./admin.js"></script>
