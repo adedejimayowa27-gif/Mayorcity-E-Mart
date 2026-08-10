@@ -250,7 +250,8 @@ async function loadVerification() {
                         ✕ Reject
                     </button>
                 </div>` : ''}
-            </div>`).join('');
+            </div>`;
+        }).join('');
 
         // ID image preview
         listEl.querySelectorAll('.verif-id-thumb').forEach(img => {
