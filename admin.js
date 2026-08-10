@@ -282,6 +282,24 @@ async function notifyUser(userId, title, message, type = 'info') {
     try {
         await supabase.from('notifications').insert({ user_id: userId, title, message, type });
     } catch (_) { /* non-fatal */ }
+
+    // Also trigger a real device push (works even if the user's site tab is
+    // closed). Best-effort — if they haven't enabled push, or the function
+    // isn't deployed yet, this just silently does nothing.
+    try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) return;
+        await fetch(`${window.SUPABASE_URL}/functions/v1/send-push-notification`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'apikey': window.SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({ user_id: userId, title, message })
+        });
+    } catch (_) { /* non-fatal — in-app notification above still worked */ }
 }
 
 async function approveVerification(verifId, userId, name) {
