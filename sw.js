@@ -12,8 +12,8 @@ const APP_SHELL = [
   '/script.js',
   '/config.js',
   '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -57,6 +57,40 @@ self.addEventListener('fetch', event => {
         }
         return response;
       }).catch(() => cached); // if offline and not cached, this just fails gracefully
+    })
+  );
+});
+
+// ── Push notifications ──────────────────────────────────────────────────
+// Fires even if the site tab isn't open, as long as the browser is running
+// (and on Android, even if the browser itself is closed).
+self.addEventListener('push', event => {
+  let data = { title: 'Mayorcity E-Mart', body: 'You have a new notification.' };
+  try { data = event.data.json(); } catch (_) { /* fall back to default above */ }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Mayorcity E-Mart', {
+      body: data.body || '',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/icon-192.png',
+      data: { url: data.url || '/index.html' }
+    })
+  );
+});
+
+// Tapping the notification focuses an existing tab if one's open, or opens a new one.
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/index.html';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
     })
   );
 });
