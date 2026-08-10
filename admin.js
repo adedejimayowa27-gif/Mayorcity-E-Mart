@@ -815,14 +815,14 @@ async function init() {
 
     // Sidebar role label
     const roleEl = document.getElementById('sidebar-role');
-    if (roleEl) roleEl.textContent = profile.role === 'admin' ? '🛡 Administrator' : '👮 Moderator';
+    if (roleEl) roleEl.textContent = currentProfile.role === 'admin' ? '🛡 Administrator' : '👮 Moderator';
 
     // Greeting
     const greetEl = document.getElementById('admin-greeting');
-    if (greetEl) greetEl.textContent = `Welcome back, ${profile.full_name || currentUser.email}.`;
+    if (greetEl) greetEl.textContent = `Welcome back, ${currentProfile.full_name || currentUser.email}.`;
 
     // Hide admin-only elements from moderators
-    if (profile.role !== 'admin') {
+    if (currentProfile.role !== 'admin') {
         document.querySelectorAll('[data-admin-only]').forEach(el => el.remove());
     }
 
