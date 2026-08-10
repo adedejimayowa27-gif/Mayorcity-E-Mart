@@ -1027,6 +1027,14 @@ footer {
   box-shadow: none;
 }
 .notif-mark-all-btn:hover { background: #eff6ff; transform: none; }
+
+.enable-push-btn {
+  width: calc(100% - 20px);
+  margin: 10px;
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  font-size: 12px;
+  padding: 10px;
+}
 .notif-item {
   padding: 12px 14px;
   border-bottom: 1px solid #f1f5f9;
