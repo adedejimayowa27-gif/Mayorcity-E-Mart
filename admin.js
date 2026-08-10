@@ -735,6 +735,29 @@ document.getElementById('id-preview-modal')?.addEventListener('click', e => {
 // ═══════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════
+
+// Prevents a stalled/recursive Supabase call from leaving the UI stuck
+// on "Verifying access…" forever — races the call against a timeout
+// and throws a clear error instead of hanging silently.
+function withTimeout(promise, ms, label) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timed out waiting for ${label} (${ms}ms). This usually means a Supabase RLS policy is hanging/recursive, or the network request is blocked.`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function showAccessDenied(loadingEl, deniedEl, message) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (deniedEl) {
+        deniedEl.style.display = 'flex';
+        if (message) {
+            const msgEl = deniedEl.querySelector('p') || deniedEl;
+            if (msgEl) msgEl.textContent = message;
+        }
+    }
+}
+
 async function init() {
     const loadingEl = document.getElementById('admin-loading');
     const contentEl = document.getElementById('admin-content');
@@ -742,38 +765,46 @@ async function init() {
 
     // Guard: Supabase must be configured before anything else
     if (!SUPABASE_CONFIGURED) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (deniedEl) {
-            deniedEl.style.display = 'flex';
-            const msgEl = deniedEl.querySelector('p') || deniedEl;
-            if (msgEl) msgEl.textContent = 'Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY as Replit Secrets and restart the workflow.';
+        showAccessDenied(loadingEl, deniedEl, 'Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY as Replit Secrets and restart the workflow.');
+        return;
+    }
+
+    try {
+        // Wait for auth state (with timeout so a stalled request can't hang the page)
+        const { data: { session } } = await withTimeout(supabase.auth.getSession(), 8000, 'auth session');
+
+        if (!session?.user) {
+            showAccessDenied(loadingEl, deniedEl);
+            return;
         }
-        return;
-    }
 
-    // Wait for auth state
-    const { data: { session } } = await supabase.auth.getSession();
+        currentUser = session.user;
 
-    if (!session?.user) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (deniedEl)  deniedEl.style.display  = 'flex';
-        return;
-    }
+        // Load profile and check role (with timeout — this is the query most
+        // likely to hang if an RLS policy on `profiles` recursively queries
+        // `profiles` itself)
+        const { data: profile, error: profileError } = await withTimeout(
+            supabase.from('profiles').select('*').eq('id', currentUser.id).single(),
+            8000,
+            'profile lookup'
+        );
 
-    currentUser = session.user;
+        if (profileError) {
+            console.error('Profile lookup failed:', profileError);
+            showAccessDenied(loadingEl, deniedEl, `Could not verify your account: ${profileError.message}`);
+            return;
+        }
 
-    // Load profile and check role
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', currentUser.id)
-        .single();
+        currentProfile = profile;
 
-    currentProfile = profile;
-
-    if (!profile || !['admin', 'moderator'].includes(profile.role)) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (deniedEl)  deniedEl.style.display  = 'flex';
+        if (!profile || !['admin', 'moderator'].includes(profile.role)) {
+            showAccessDenied(loadingEl, deniedEl);
+            return;
+        }
+    } catch (err) {
+        // Any hang/exception surfaces here instead of leaving the spinner stuck
+        console.error('Admin init failed:', err);
+        showAccessDenied(loadingEl, deniedEl, err.message || 'Something went wrong while verifying access. Check the browser console for details.');
         return;
     }
 
