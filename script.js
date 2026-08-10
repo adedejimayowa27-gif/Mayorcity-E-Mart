@@ -663,12 +663,12 @@ async function postListing(formData, imageFile) {
     }
 
     // ── Marketplace ("For Sale") listing — requires the ₦200 posting fee ──
-    // 1. Collect payment client-side via Paystack Inline (public key only —
+    // 1. Collect payment client-side via Flutterwave Inline (public key only —
     //    safe to expose in the browser).
-    const reference = await collectListingFeePayment(currentUser.email);
+    const { transactionId, txRef } = await collectListingFeePayment(currentUser.email, formData.seller, formData.whatsapp);
 
-    // 2. Hand the reference + listing data to the verify-and-post-listing
-    //    Edge Function. It re-checks the payment with Paystack's SECRET key
+    // 2. Hand the transaction id + listing data to the verify-and-post-listing
+    //    Edge Function. It re-checks the payment with Flutterwave's SECRET key
     //    (never exposed to the browser) and only then creates the listing,
     //    using the service role. Direct client inserts for Market listings
     //    are blocked by RLS — this Edge Function is the only path that can
@@ -685,7 +685,8 @@ async function postListing(formData, imageFile) {
             'apikey': window.SUPABASE_ANON_KEY
         },
         body: JSON.stringify({
-            reference,
+            transaction_id: transactionId,
+            tx_ref: txRef,
             listing: {
                 product_name:    formData.productName,
                 category:        formData.productCategory,
@@ -699,33 +700,45 @@ async function postListing(formData, imageFile) {
     });
     const result = await res.json().catch(() => ({}));
     if (!res.ok || result.error) {
-        throw new Error(result.error || 'Payment was received but the listing could not be created. Please contact support with your payment reference: ' + reference);
+        throw new Error(result.error || 'Payment was received but the listing could not be created. Please contact support with your payment reference: ' + txRef);
     }
 }
 
-// Opens the Paystack Inline popup for the ₦200 listing fee.
-// Resolves with the payment reference on success; rejects if the user closes
-// the popup or Paystack isn't configured/loaded.
-function collectListingFeePayment(email) {
+// Opens the Flutterwave Inline popup for the ₦200 listing fee.
+// Resolves with { transactionId, txRef } on success; rejects if the user
+// closes the popup or Flutterwave isn't configured/loaded.
+function collectListingFeePayment(email, name, phone) {
     return new Promise((resolve, reject) => {
-        if (!window.PaystackPop) {
+        if (!window.FlutterwaveCheckout) {
             reject(new Error('Payment system failed to load. Please check your connection and try again.'));
             return;
         }
-        if (!window.PAYSTACK_PUBLIC_KEY) {
+        if (!window.FLUTTERWAVE_PUBLIC_KEY) {
             reject(new Error('Payments are not configured yet. Please contact the site admin.'));
             return;
         }
-        const handler = window.PaystackPop.setup({
-            key: window.PAYSTACK_PUBLIC_KEY,
-            email: email,
-            amount: 20000, // ₦200 in kobo
+        const txRef = 'EMART-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+        let settled = false;
+
+        FlutterwaveCheckout({
+            public_key: window.FLUTTERWAVE_PUBLIC_KEY,
+            tx_ref: txRef,
+            amount: 200, // ₦200 — Flutterwave amounts are whole Naira, not kobo
             currency: 'NGN',
-            ref: 'EMART-' + Date.now() + '-' + Math.floor(Math.random() * 100000),
-            callback: function(response) { resolve(response.reference); },
-            onClose: function() { reject(new Error('Payment was not completed.')); }
+            payment_options: 'card, banktransfer, ussd, mobilemoney',
+            customer: { email, name: name || email, phone_number: phone || '' },
+            customizations: {
+                title: 'Mayorcity E-Mart',
+                description: 'Marketplace listing fee'
+            },
+            callback: function (payment) {
+                settled = true;
+                resolve({ transactionId: payment.transaction_id, txRef: payment.tx_ref });
+            },
+            onclose: function (incomplete) {
+                if (!settled && incomplete) reject(new Error('Payment was not completed.'));
+            }
         });
-        handler.openIframe();
     });
 }
 
@@ -1544,8 +1557,70 @@ document.addEventListener('keydown', e => {
 // INIT
 // ═══════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════
-// NOTIFICATIONS
+// PUSH NOTIFICATIONS (real device push — works even with the site closed)
 // ═══════════════════════════════════════════════════════════════════════
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function checkPushSubscriptionState() {
+    const enableBtn = document.getElementById('enable-push-btn');
+    if (!enableBtn) return;
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !window.VAPID_PUBLIC_KEY) {
+        enableBtn.style.display = 'none'; // unsupported browser or not configured — don't show a dead button
+        return;
+    }
+    if (Notification.permission === 'denied') {
+        enableBtn.style.display = 'none'; // user already said no at the OS/browser level — asking again would just annoy them
+        return;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    const existingSub = await reg.pushManager.getSubscription();
+    enableBtn.style.display = existingSub ? 'none' : 'block';
+}
+
+async function enablePushNotifications() {
+    if (!currentUser) return;
+    const enableBtn = document.getElementById('enable-push-btn');
+
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            showToast('Notifications permission was not granted.', 'warning');
+            return;
+        }
+
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(window.VAPID_PUBLIC_KEY)
+            });
+        }
+
+        const subJson = sub.toJSON();
+        const { error } = await supabase.from('push_subscriptions').upsert({
+            user_id: currentUser.id,
+            endpoint: subJson.endpoint,
+            p256dh: subJson.keys.p256dh,
+            auth_key: subJson.keys.auth
+        }, { onConflict: 'endpoint' });
+        if (error) throw new Error(error.message);
+
+        if (enableBtn) enableBtn.style.display = 'none';
+        showToast('Push notifications enabled on this device!', 'success');
+    } catch (err) {
+        showToast('Could not enable push notifications: ' + err.message, 'error');
+    }
+}
+
+
 let notifChannel = null;
 let notifications = [];
 
@@ -1647,6 +1722,7 @@ function bindNotifications() {
         }
     });
     document.getElementById('notif-mark-all-read')?.addEventListener('click', markAllNotificationsRead);
+    document.getElementById('enable-push-btn')?.addEventListener('click', enablePushNotifications);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1802,6 +1878,7 @@ async function init() {
             await loadCurrentProfile(currentUser.id);
             await loadNotifications();
             subscribeToNotifications();
+            checkPushSubscriptionState();
         } else {
             currentProfile = null;
             unsubscribeFromNotifications();
