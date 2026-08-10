@@ -54,6 +54,7 @@
               <p class="notif-dropdown-title">Notifications</p>
               <button type="button" id="notif-mark-all-read" class="notif-mark-all-btn">Mark all read</button>
             </div>
+            <button type="button" id="enable-push-btn" class="enable-push-btn" style="display:none;">🔔 Enable push notifications on this device</button>
             <div id="notif-list" class="notif-list">
               <p class="admin-empty-msg" style="padding:16px;">No notifications yet.</p>
             </div>
@@ -502,7 +503,7 @@
   <button type="button" id="install-app-btn" style="display:none;">📲 Install App</button>
 
   <script src="./config.js"></script>
-  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
   <script type="module" src="./script.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
