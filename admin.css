@@ -608,4 +608,29 @@
   .admin-main { margin-left: 0; padding: 16px; }
   .audit-row { grid-template-columns: 1fr 1fr; }
   .verif-list { grid-template-columns: 1fr; }
+
+  /* Stat cards — 2 per row instead of an unpredictable auto-fill that can
+     end up too cramped or too sparse on a narrow screen */
+  .admin-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .admin-stat-card { padding: 14px; border-radius: 10px; }
+  .asc-value { font-size: 24px; }
+  .asc-label { font-size: 11px; }
+
+  .admin-page-header h1 { font-size: 20px; }
+  .admin-section-card { padding: 16px; border-radius: 10px; }
+
+  /* Toolbar — stack full-width instead of squeezing search + 2 dropdowns
+     into one row */
+  .admin-toolbar { flex-direction: column; align-items: stretch; }
+  .admin-search-input, .admin-filter-select, .admin-refresh-btn { width: 100%; min-width: 0; }
+
+  /* Tables already scroll horizontally (admin-table-wrap has overflow-x),
+     but tighten padding/font so more fits before scrolling kicks in */
+  .admin-table th, .admin-table td { padding: 8px 10px; font-size: 13px; }
+
+  #id-preview-modal .modal-box { max-width: 92vw; padding: 16px; }
 }
