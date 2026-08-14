@@ -690,7 +690,12 @@ async function postListing(formData, imageFile) {
             image_url:       imageUrl,
             seller_name:     formData.seller,
             seller_whatsapp: formData.whatsapp,
-            user_id:         currentUser.id
+            user_id:         currentUser.id,
+            // The listings table requires a non-empty payment_ref for every
+            // Market listing (a DB check constraint). This isn't a real
+            // transaction — it's a clear marker that this specific listing
+            // was let through free as the user's first one, not paid for.
+            payment_ref:     'FREE_FIRST_LISTING'
         });
         // If the free-listing RLS rule rejects this (e.g. the count check
         // above was stale, or this account already used its free listing),
