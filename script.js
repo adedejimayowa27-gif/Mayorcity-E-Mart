@@ -671,13 +671,13 @@ async function postListing(formData, imageFile) {
     // also enforced by a database (RLS) rule — see the SQL note shipped
     // alongside this file — so it can't be bypassed by editing this script
     // in the browser and re-submitting.
-    const { count: priorMarketCount, error: countErr } = await supabase
+    const { data: priorMarketRows, error: countErr } = await supabase
         .from('listings')
-        .select('id', { count: 'exact', head: true })
+        .select('id')
         .eq('user_id', currentUser.id)
         .eq('type', 'Market');
 
-    const isFirstFreeListing = !countErr && (priorMarketCount || 0) === 0;
+    const isFirstFreeListing = !countErr && (priorMarketRows?.length || 0) === 0;
 
     if (isFirstFreeListing) {
         const { error } = await supabase.from('listings').insert({
@@ -696,6 +696,10 @@ async function postListing(formData, imageFile) {
         // above was stale, or this account already used its free listing),
         // fall through to the normal paid flow below instead of failing.
         if (!error) return;
+        console.warn('Free first-listing insert failed, falling back to paid flow:', error?.message || error);
+    }
+    if (countErr) {
+        console.warn('Free first-listing count check failed, falling back to paid flow:', countErr?.message || countErr);
     }
 
     // ── Every listing after the first — requires the ₦200 posting fee ──
