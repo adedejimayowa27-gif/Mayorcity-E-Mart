@@ -192,6 +192,22 @@ button:hover {
   color: #0f172a;
 }
 
+/* "Post a New Item" — deliberately a different color (green) from every
+   other button on the page so it stands out as the primary action. */
+.cta-post-btn {
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 10px rgba(34, 197, 94, 0.45);
+}
+
+.cta-post-btn:hover {
+  background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(34, 197, 94, 0.55);
+}
+
 /* --- Control Dashboard & Live Filter Interfaces --- */
 .control-panel-section {
   display: flex;
