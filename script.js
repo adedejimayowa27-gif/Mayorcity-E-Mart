@@ -31,6 +31,7 @@ const uploadFormSection = document.getElementById('upload-form-section');
 const adminControlBar   = document.getElementById('admin-control-bar');
 const idUploadBanner    = document.getElementById('id-upload-banner');
 const idUploadModal     = document.getElementById('idUploadModal');
+const resetPasswordModal = document.getElementById('resetPasswordModal');
 const viewModal         = document.getElementById('viewModal');
 const editModal         = document.getElementById('editModal');
 const authModal         = document.getElementById('authModal');
@@ -341,6 +342,16 @@ function updateAuthUI() {
 
         if (adminLink) adminLink.style.display = isAdmin() ? '' : 'none';
 
+        // Verification-document banner — shown when the account has no
+        // document on file yet. This covers the common case where email
+        // confirmation is required at signup, so the browser had no session
+        // yet and the original upload attempt was skipped.
+        if (idUploadBanner) {
+            const stillPending = currentProfile?.verification_status === 'pending';
+            const noIdYet      = !currentProfile?.student_id_url;
+            idUploadBanner.style.display = (stillPending && noIdYet) ? 'block' : 'none';
+        }
+
         // Admin bar
         if (adminControlBar) {
             adminControlBar.style.display = isStaff() ? 'block' : 'none';
@@ -348,15 +359,6 @@ function updateAuthUI() {
             if (titleEl && isMod()) titleEl.textContent = '🛡️ MODERATOR MODE — You can review and moderate listings.';
         }
 
-        // Student ID upload banner — shown when the account has no ID on file yet.
-        // This covers the common case where email confirmation is required at
-        // signup, so the browser had no session yet and the original upload
-        // attempt was skipped.
-        if (idUploadBanner) {
-            const stillPending = currentProfile?.verification_status === 'pending';
-            const noIdYet      = !currentProfile?.student_id_url;
-            idUploadBanner.style.display = (stillPending && noIdYet) ? 'block' : 'none';
-        }
     } else {
         if (authBtn)  authBtn.style.display   = '';
         if (userMenu) userMenu.style.display  = 'none';
@@ -662,7 +664,41 @@ async function postListing(formData, imageFile) {
         return;
     }
 
-    // ── Marketplace ("For Sale") listing — requires the ₦200 posting fee ──
+    // ── Marketplace ("For Sale") listing ──
+    // A user's very first Market listing is free, forever — every one after
+    // that costs ₦200. We check how many Market listings this user already
+    // has; if zero, we skip payment and insert directly. This free path is
+    // also enforced by a database (RLS) rule — see the SQL note shipped
+    // alongside this file — so it can't be bypassed by editing this script
+    // in the browser and re-submitting.
+    const { count: priorMarketCount, error: countErr } = await supabase
+        .from('listings')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', currentUser.id)
+        .eq('type', 'Market');
+
+    const isFirstFreeListing = !countErr && (priorMarketCount || 0) === 0;
+
+    if (isFirstFreeListing) {
+        const { error } = await supabase.from('listings').insert({
+            emart_id:        generateEmartId(),
+            product_name:    formData.productName,
+            type:            'Market',
+            category:        formData.productCategory,
+            price:           formData.price || 0,
+            description:     formData.description,
+            image_url:       imageUrl,
+            seller_name:     formData.seller,
+            seller_whatsapp: formData.whatsapp,
+            user_id:         currentUser.id
+        });
+        // If the free-listing RLS rule rejects this (e.g. the count check
+        // above was stale, or this account already used its free listing),
+        // fall through to the normal paid flow below instead of failing.
+        if (!error) return;
+    }
+
+    // ── Every listing after the first — requires the ₦200 posting fee ──
     // 1. Collect payment client-side via Flutterwave Inline (public key only —
     //    safe to expose in the browser).
     const { transactionId, txRef } = await collectListingFeePayment(currentUser.email, formData.seller, formData.whatsapp);
@@ -1241,11 +1277,50 @@ function bindIdUploadModal() {
             await loadCurrentProfile(currentUser.id);
             updateAuthUI();
             if (idUploadModal) idUploadModal.style.display = 'none';
-            showToast('Student ID uploaded! An admin will review it shortly.', 'success');
+            showToast('Document uploaded! An admin will review it shortly.', 'success');
         } catch (err) {
             if (errorEl) { errorEl.textContent = err.message; errorEl.style.display = 'block'; }
         } finally {
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Upload ID'; }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Upload Document'; }
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EVENT LISTENERS — SET NEW PASSWORD (after clicking the reset-link email)
+// ═══════════════════════════════════════════════════════════════════════
+function bindResetPasswordModal() {
+    document.getElementById('resetPasswordForm')?.addEventListener('submit', async e => {
+        e.preventDefault();
+        const errorEl = document.getElementById('reset-password-error');
+        if (errorEl) errorEl.style.display = 'none';
+
+        const pw1 = document.getElementById('reset-password-new')?.value || '';
+        const pw2 = document.getElementById('reset-password-confirm')?.value || '';
+
+        if (pw1.length < 8) {
+            if (errorEl) { errorEl.textContent = 'Password must be at least 8 characters.'; errorEl.style.display = 'block'; }
+            return;
+        }
+        if (pw1 !== pw2) {
+            if (errorEl) { errorEl.textContent = 'Passwords do not match.'; errorEl.style.display = 'block'; }
+            return;
+        }
+
+        const submitBtn = document.getElementById('reset-password-submit');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="btn-spinner"></span>Updating…'; }
+
+        try {
+            const { error } = await supabase.auth.updateUser({ password: pw1 });
+            if (error) throw new Error(error.message);
+
+            if (resetPasswordModal) resetPasswordModal.style.display = 'none';
+            document.getElementById('resetPasswordForm')?.reset();
+            showToast('Password updated! You can now use it to sign in.', 'success');
+        } catch (err) {
+            if (errorEl) { errorEl.textContent = err.message; errorEl.style.display = 'block'; }
+        } finally {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update Password'; }
         }
     });
 }
@@ -1851,12 +1926,13 @@ function bindDashboard() {
 
 async function init() {
     bindAuthModal();
-    bindIdUploadModal();
     bindListingEvents();
     bindLfModal();
     bindBackToTop();
     bindNotifications();
     bindDashboard();
+    bindIdUploadModal();
+    bindResetPasswordModal();
 
     if (!SUPABASE_CONFIGURED) {
         showToast(
@@ -1886,6 +1962,14 @@ async function init() {
         updateAuthUI();
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
             await loadListings();
+        }
+        if (event === 'PASSWORD_RECOVERY') {
+            // Supabase fires this after the user clicks the reset-password
+            // link in their email and lands back on the site. Show the
+            // "set new password" modal instead of leaving them signed into
+            // a temporary session with no way to change their password.
+            if (authModal) authModal.style.display = 'none';
+            if (resetPasswordModal) resetPasswordModal.style.display = 'flex';
         }
     });
 }
