@@ -326,10 +326,14 @@ async function approveVerification(verifId, userId, name) {
 
     const now = new Date().toISOString();
     const [r1, r2] = await Promise.all([
-        supabase.from('student_verifications').update({ status: 'verified', reviewed_by: currentUser.id, reviewed_at: now }).eq('id', verifId),
-        supabase.from('profiles').update({ verification_status: 'verified' }).eq('id', userId)
+        supabase.from('student_verifications').update({ status: 'verified', reviewed_by: currentUser.id, reviewed_at: now }).eq('id', verifId).select(),
+        supabase.from('profiles').update({ verification_status: 'verified' }).eq('id', userId).select()
     ]);
     if (r1.error || r2.error) { showToast('Failed to approve: ' + (r1.error?.message || r2.error?.message), 'error'); return; }
+    if (!r1.data?.length || !r2.data?.length) {
+        showToast('Approve was blocked by a database permission rule — no rows were actually changed. Check RLS policies on profiles/student_verifications.', 'error');
+        return;
+    }
 
     await logAction('APPROVE_VERIFICATION', 'user', userId, { name, verif_id: verifId });
     await notifyUser(userId, '✅ You\'re verified!', 'Your student ID has been approved. You can now post listings on Mayorcity E-Mart.', 'success');
@@ -369,10 +373,14 @@ async function rejectVerification(verifId, userId, name) {
 
     const now = new Date().toISOString();
     const [r1, r2] = await Promise.all([
-        supabase.from('student_verifications').update({ status: 'rejected', reviewed_by: currentUser.id, reviewed_at: now, review_note: note }).eq('id', verifId),
-        supabase.from('profiles').update({ verification_status: 'rejected' }).eq('id', userId)
+        supabase.from('student_verifications').update({ status: 'rejected', reviewed_by: currentUser.id, reviewed_at: now, review_note: note }).eq('id', verifId).select(),
+        supabase.from('profiles').update({ verification_status: 'rejected' }).eq('id', userId).select()
     ]);
     if (r1.error || r2.error) { showToast('Failed to reject: ' + (r1.error?.message || r2.error?.message), 'error'); return; }
+    if (!r1.data?.length || !r2.data?.length) {
+        showToast('Reject was blocked by a database permission rule — no rows were actually changed. Check RLS policies on profiles/student_verifications.', 'error');
+        return;
+    }
 
     await logAction('REJECT_VERIFICATION', 'user', userId, { name, note, verif_id: verifId });
     await notifyUser(userId, '❌ Verification rejected', `Reason: ${note}. You can upload a new Student ID photo and it will be reviewed again.`, 'error');
