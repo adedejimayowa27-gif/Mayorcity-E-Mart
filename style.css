@@ -276,6 +276,106 @@ button:hover {
   color: #0f172a;
   border-color: #38bdf8;
 }
+
+.price-sort-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-end;
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+}
+
+.price-range-filter label,
+.sort-filter label {
+  display: block;
+  font-size: 13px;
+  color: #475569;
+  margin-bottom: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.price-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.price-range-inputs input {
+  width: 110px;
+  padding: 11px 14px;
+  font-size: 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 999px;
+  box-sizing: border-box;
+  background: white;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.price-range-inputs input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.price-range-inputs span {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.sort-filter select {
+  padding: 11px 36px 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid #e2e8f0;
+  border-radius: 999px;
+  background: white;
+  color: #0f172a;
+  min-width: 190px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23475569' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sort-filter select:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.sort-filter select:hover,
+.price-range-inputs input:hover {
+  border-color: #94a3b8;
+}
+
+.clear-filters-btn {
+  background: white;
+  color: #64748b;
+  border: 2px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 11px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.clear-filters-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
 /* --- Dynamic Products Layout Grid --- */
 .products-grid {
   display: grid;
@@ -536,6 +636,12 @@ footer {
 
   .hero-cta-buttons { flex-direction: column; align-items: stretch; }
   .hero-cta-buttons button { width: 100%; }
+
+  .price-sort-wrapper { flex-direction: column; align-items: stretch; padding: 16px; }
+  .price-range-inputs { width: 100%; }
+  .price-range-inputs input { flex: 1; width: auto; }
+  .sort-filter select { width: 100%; min-width: 0; }
+  .clear-filters-btn { margin-left: 0; width: 100%; }
 
   .modal-box { padding: 20px; max-height: 85vh; }
   .auth-tabs-row { font-size: 13px; }
@@ -1135,6 +1241,9 @@ footer {
 .dash-listing-info { flex: 1; min-width: 0; }
 .dash-listing-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dash-listing-meta { font-size: 12px; color: #64748b; }
+.dash-expired-tag  { color: #ef4444; font-weight: 700; }
+.dash-expiring-tag { color: #f59e0b; font-weight: 700; }
+.dash-renew-btn    { background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); }
 .dash-listing-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .dash-listing-actions button {
   font-size: 11px;
