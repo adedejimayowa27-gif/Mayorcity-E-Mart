@@ -243,6 +243,24 @@ async function loadCurrentProfile(userId) {
     if (!userId) { currentProfile = null; return; }
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     currentProfile = data || null;
+
+    // A suspended account should not stay signed in, whether they're logging
+    // in fresh or already had a session open before an admin suspended them.
+    if (currentProfile?.verification_status === 'suspended') {
+        currentProfile = null;
+        currentUser = null;
+        try {
+            // scope: 'local' clears the session on this device without a
+            // round trip to Supabase's server-side logout endpoint — avoids
+            // that endpoint's 403 entirely, and never blocks the rest of
+            // the sign-in flow (updateAuthUI, loadListings, etc.) even if
+            // something here does fail.
+            await supabase.auth.signOut({ scope: 'local' });
+        } catch (err) {
+            console.warn('Sign-out during suspension check failed (continuing anyway):', err?.message || err);
+        }
+        showToast('Your account has been suspended. Contact an admin if you believe this is a mistake.', 'error', 10000);
+    }
 }
 
 async function handleSignIn(email, password) {
