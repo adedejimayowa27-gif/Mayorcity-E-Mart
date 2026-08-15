@@ -152,6 +152,26 @@
         <li class="category-item">Other Items</li>
       </ul>
     </div>
+
+    <div class="price-sort-wrapper">
+      <div class="price-range-filter">
+        <label for="price-min-input">Price Range (₦)</label>
+        <div class="price-range-inputs">
+          <input type="number" id="price-min-input" min="0" placeholder="Min">
+          <span>–</span>
+          <input type="number" id="price-max-input" min="0" placeholder="Max">
+        </div>
+      </div>
+      <div class="sort-filter">
+        <label for="sort-select">Sort By</label>
+        <select id="sort-select">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="price-low">Price: Low to High</option>
+          <option value="price-high">Price: High to Low</option>
+        </select>
+      </div>
+    </div>
   </section>
 
   <!-- Dynamic Product Grid Layout Output Context -->
@@ -312,6 +332,12 @@
 
           <label for="signup-student-id">ID Card, Docket, or Course Form (photo)</label>
           <input id="signup-student-id" type="file" accept="image/*" required>
+
+          <!-- Cloudflare Turnstile — bot/rate-limit check. Rendered explicitly by
+               script.js (using window.TURNSTILE_SITE_KEY from config.js) so timing
+               is controlled. The token is verified by Supabase itself, server-side,
+               during signUp() — it can't be bypassed by editing this page's JS. -->
+          <div id="turnstile-widget" style="margin:10px 0;"></div>
 
           <button type="submit" id="signup-submit" class="auth-submit-btn">Create Account</button>
         </form>
@@ -524,6 +550,7 @@
   <!-- Install App button — shown when the browser offers installability -->
   <button type="button" id="install-app-btn" style="display:none;">📲 Install App</button>
 
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="./config.js"></script>
   <script src="https://checkout.flutterwave.com/v3.js"></script>
   <script type="module" src="./script.js"></script>
