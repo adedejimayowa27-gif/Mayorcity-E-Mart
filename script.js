@@ -22,11 +22,30 @@ let currentCategory = 'Show All';
 let currentPage     = 1;
 const LISTINGS_PER_PAGE = 12;
 
+// A listing is auto-hidden from the public grid once it's been Active for
+// this many days. Owners can renew it from their Dashboard to reset the clock.
+const LISTING_EXPIRY_DAYS = 30;
+function isExpired(listing) {
+    if (listing.status !== 'Active') return false;
+    const created = new Date(listing.created_at).getTime();
+    if (Number.isNaN(created)) return false;
+    return (Date.now() - created) > LISTING_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+}
+function daysUntilExpiry(listing) {
+    const created = new Date(listing.created_at).getTime();
+    if (Number.isNaN(created)) return null;
+    const daysLeft = LISTING_EXPIRY_DAYS - Math.floor((Date.now() - created) / (24 * 60 * 60 * 1000));
+    return daysLeft;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // DOM REFS
 // ═══════════════════════════════════════════════════════════════════════
 const productsGrid      = document.getElementById('products');
 const searchBar         = document.getElementById('searchBar');
+const priceMinInput     = document.getElementById('price-min-input');
+const priceMaxInput     = document.getElementById('price-max-input');
+const sortSelect        = document.getElementById('sort-select');
 const uploadFormSection = document.getElementById('upload-form-section');
 const adminControlBar   = document.getElementById('admin-control-bar');
 const idUploadBanner    = document.getElementById('id-upload-banner');
@@ -232,7 +251,7 @@ async function handleSignIn(email, password) {
     return data;
 }
 
-async function handleSignUp({ fullName, email, password, phone, matricNumber, department, level, studentIdFile }) {
+async function handleSignUp({ fullName, email, password, phone, matricNumber, department, level, studentIdFile, turnstileToken }) {
     // 1. Create auth user. All registration fields ride along as user metadata
     //    so the `handle_new_user` DB trigger (SECURITY DEFINER, bypasses RLS)
     //    can create both the profile and the pending student_verifications row
@@ -241,6 +260,9 @@ async function handleSignUp({ fullName, email, password, phone, matricNumber, de
     //    emailRedirectTo ensures the confirmation link sends the user back to
     //    THIS site (important after moving from Replit to Netlify — otherwise
     //    the link uses whatever Site URL is configured in the Supabase dashboard).
+    //    captchaToken: Supabase verifies this Turnstile token server-side against
+    //    the secret key configured in the dashboard — a bot can't fake it by
+    //    editing this script, since Supabase itself checks it, not this code.
     const { data: authData, error: authErr } = await supabase.auth.signUp({
         email, password,
         options: {
@@ -251,7 +273,8 @@ async function handleSignUp({ fullName, email, password, phone, matricNumber, de
                 department,
                 level
             },
-            emailRedirectTo: window.location.origin + '/index.html'
+            emailRedirectTo: window.location.origin + '/index.html',
+            captchaToken: turnstileToken || undefined
         }
     });
     if (authErr) throw new Error(authErr.message);
@@ -517,17 +540,35 @@ function buildBadges(listing) {
 function displayListings() {
     if (!productsGrid) return;
     const searchText = (searchBar?.value || '').toLowerCase();
+    const priceMin = parseFloat(priceMinInput?.value);
+    const priceMax = parseFloat(priceMaxInput?.value);
 
     const filtered = allListings.filter(l => {
         const name   = (l.product_name || '').toLowerCase();
         const desc   = (l.description  || '').toLowerCase();
         const seller = (l.seller_name  || '').toLowerCase();
         const eId    = (l.emart_id     || '').toLowerCase();
+        const price  = Number(l.price || 0);
+        const priceOk = l.type === 'Lost' ? true
+            : (Number.isNaN(priceMin) || price >= priceMin)
+              && (Number.isNaN(priceMax) || price <= priceMax);
         return (currentTab === 'all' || l.type === currentTab)
             && (currentCategory === 'Show All' || l.category === currentCategory)
+            && priceOk
+            && !isExpired(l)
             && (name.includes(searchText) || desc.includes(searchText)
                 || seller.includes(searchText) || eId.includes(searchText));
     });
+
+    const sortVal = sortSelect?.value || 'newest';
+    if (sortVal === 'oldest') {
+        filtered.reverse(); // allListings is fetched newest-first, so reverse gives oldest-first
+    } else if (sortVal === 'price-low') {
+        filtered.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortVal === 'price-high') {
+        filtered.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    }
+    // 'newest' needs no re-sort — allListings already comes ordered that way.
 
     if (filtered.length === 0) {
         productsGrid.innerHTML = "<p class='no-results-msg'>No items found matching the selected criteria.</p>";
@@ -1298,6 +1339,29 @@ function bindIdUploadModal() {
 // ═══════════════════════════════════════════════════════════════════════
 // EVENT LISTENERS — SET NEW PASSWORD (after clicking the reset-link email)
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// SIGNUP BOT CHECK — Cloudflare Turnstile
+// ═══════════════════════════════════════════════════════════════════════
+// Renders the widget once a real site key is configured. The Turnstile
+// script loads with `async defer`, so its timing relative to this module
+// isn't guaranteed — poll briefly for window.turnstile to exist rather
+// than assuming it's ready.
+function renderTurnstileWidget(attemptsLeft = 20) {
+    const container = document.getElementById('turnstile-widget');
+    if (!container) return;
+    if (!window.TURNSTILE_SITE_KEY || window.TURNSTILE_SITE_KEY === 'YOUR_TURNSTILE_SITE_KEY_HERE') {
+        return; // not configured yet — signup just skips the bot check (see submit handler)
+    }
+    if (!window.turnstile) {
+        if (attemptsLeft <= 0) return;
+        setTimeout(() => renderTurnstileWidget(attemptsLeft - 1), 250);
+        return;
+    }
+    window.turnstileWidgetId = window.turnstile.render(container, {
+        sitekey: window.TURNSTILE_SITE_KEY
+    });
+}
+
 function bindResetPasswordModal() {
     document.getElementById('resetPasswordForm')?.addEventListener('submit', async e => {
         e.preventDefault();
@@ -1412,9 +1476,17 @@ function bindAuthModal() {
             showAuthError('signup-error', 'Password must be at least 8 characters.'); return;
         }
 
+        const turnstileToken = window.turnstileWidgetId != null && window.turnstile
+            ? window.turnstile.getResponse(window.turnstileWidgetId)
+            : null;
+        if (window.TURNSTILE_SITE_KEY && window.TURNSTILE_SITE_KEY !== 'YOUR_TURNSTILE_SITE_KEY_HERE' && !turnstileToken) {
+            showAuthError('signup-error', 'Please complete the verification check before continuing.'); return;
+        }
+
         setAuthBtnLoading('signup-submit', true);
         try {
-            const authData = await handleSignUp({ fullName, email, password, phone, matricNumber, department, level, studentIdFile });
+            const authData = await handleSignUp({ fullName, email, password, phone, matricNumber, department, level, studentIdFile, turnstileToken });
+            if (window.turnstileWidgetId != null && window.turnstile) window.turnstile.reset(window.turnstileWidgetId);
             closeAuthModal();
             if (!authData.session) {
                 // Email confirmation required
@@ -1431,6 +1503,7 @@ function bindAuthModal() {
             }
         } catch (err) {
             showAuthError('signup-error', err.message);
+            if (window.turnstileWidgetId != null && window.turnstile) window.turnstile.reset(window.turnstileWidgetId);
         } finally {
             setAuthBtnLoading('signup-submit', false, 'Create Account');
         }
@@ -1505,6 +1578,9 @@ function bindListingEvents() {
 
     // Search
     searchBar?.addEventListener('input', () => { currentPage = 1; displayListings(); });
+    priceMinInput?.addEventListener('input', () => { currentPage = 1; displayListings(); });
+    priceMaxInput?.addEventListener('input', () => { currentPage = 1; displayListings(); });
+    sortSelect?.addEventListener('change', () => { currentPage = 1; displayListings(); });
 
     // Hero buttons
     document.getElementById('hero-explore-btn')?.addEventListener('click', () => {
@@ -1855,20 +1931,47 @@ function renderDashboardList() {
         return;
     }
 
-    listEl.innerHTML = filtered.map(l => `
+    listEl.innerHTML = filtered.map(l => {
+        const expired  = isExpired(l);
+        const daysLeft = daysUntilExpiry(l);
+        let expiryNote = '';
+        if (l.status === 'Active') {
+            if (expired) expiryNote = ' • <span class="dash-expired-tag">Expired — hidden from listings</span>';
+            else if (daysLeft !== null && daysLeft <= 5) expiryNote = ` • <span class="dash-expiring-tag">Expires in ${daysLeft}d</span>`;
+        }
+        return `
         <div class="dash-listing-row" data-id="${l.id}">
             <img src="${l.image_url || ''}" alt="" class="dash-listing-thumb" onerror="this.style.display='none'">
             <div class="dash-listing-info">
                 <p class="dash-listing-name">${escapeHtml(l.product_name)}</p>
-                <p class="dash-listing-meta">${l.type === 'Market' ? '₦' + Number(l.price || 0).toLocaleString() : l.type} • ${formatDate(l.created_at)}</p>
+                <p class="dash-listing-meta">${l.type === 'Market' ? '₦' + Number(l.price || 0).toLocaleString() : l.type} • ${formatDate(l.created_at)}${expiryNote}</p>
             </div>
             <div class="dash-listing-actions">
+                ${expired ? `<button type="button" class="dash-renew-btn" data-id="${l.id}">Renew Listing</button>` : ''}
                 ${l.status === 'Active' ? `<button type="button" class="dash-sold-btn" data-id="${l.id}">${l.type === 'Market' ? 'Mark Sold' : 'Mark Resolved'}</button>` : ''}
                 <button type="button" class="dash-edit-btn" data-id="${l.id}">Edit</button>
                 <button type="button" class="dash-delete-btn" data-id="${l.id}">Delete</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.dash-renew-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            btn.disabled = true;
+            const { error } = await supabase.from('listings')
+                .update({ created_at: new Date().toISOString() })
+                .eq('id', id);
+            if (error) {
+                showToast('Could not renew listing: ' + error.message, 'error');
+                btn.disabled = false;
+                return;
+            }
+            showToast('Listing renewed — it\'s visible again for another 30 days.', 'success');
+            await openDashboard();
+            await loadListings();
+        });
+    });
 
     listEl.querySelectorAll('.dash-sold-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -1942,6 +2045,7 @@ async function init() {
     bindDashboard();
     bindIdUploadModal();
     bindResetPasswordModal();
+    renderTurnstileWidget();
 
     if (!SUPABASE_CONFIGURED) {
         showToast(
