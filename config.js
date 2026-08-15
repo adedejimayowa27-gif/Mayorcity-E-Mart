@@ -15,3 +15,11 @@ window.FLUTTERWAVE_PUBLIC_KEY = "FLWPUBK-70e7b652bc00ffd3064e6529157df441-X";
 // used to subscribe a device, never to send a push; the matching private key
 // stays only in the send-push-notification Edge Function's secrets).
 window.VAPID_PUBLIC_KEY = "BGBSAOFytefo5f0JDXWmn3CZLpmbw9DT-3CmmRtUDu1D9A_qETnKMWKPbUh31xwQaISaVsUWzQTQyHfcqjgb_Zo";
+
+// Cloudflare Turnstile SITE key only — safe to expose in the browser (it can
+// only render the widget, never verify a token). Get this from:
+// Cloudflare Dashboard → Turnstile → Add Site → copy the "Site Key".
+// The matching SECRET key goes into Supabase, NOT here — see:
+// Supabase Dashboard → Authentication → Settings → Bot and Abuse Protection
+// → enable "Cloudflare Turnstile" → paste the secret key there.
+window.TURNSTILE_SITE_KEY = "YOUR_TURNSTILE_SITE_KEY_HERE";
