@@ -135,7 +135,7 @@ function switchTab(tabName) {
 async function loadOverview() {
     const [profilesRes, listingsRes, reportsRes, recentRes] = await Promise.all([
         supabase.from('profiles').select('verification_status, role'),
-        supabase.from('listings').select('status'),
+        supabase.from('listings').select('status, type, payment_ref'),
         supabase.from('reports').select('status').eq('status', 'pending'),
         supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(10)
     ]);
@@ -152,6 +152,19 @@ async function loadOverview() {
     set('ov-listings',    listings.length);
     set('ov-reports',     reports.length);
     set('ov-hidden',      listings.filter(l => l.status === 'Hidden').length);
+
+    // Revenue — every Market listing has a non-empty payment_ref (DB rule).
+    // Free-first listings are marked with the exact sentinel 'FREE_FIRST_LISTING';
+    // everything else with a payment_ref actually paid the flat ₦200 fee.
+    const MARKET_LISTING_FEE = 200;
+    const marketListings = listings.filter(l => l.type === 'Market');
+    const freeListings = marketListings.filter(l => l.payment_ref === 'FREE_FIRST_LISTING');
+    const paidListings  = marketListings.filter(l => l.payment_ref && l.payment_ref !== 'FREE_FIRST_LISTING');
+    const totalRevenue  = paidListings.length * MARKET_LISTING_FEE;
+
+    set('ov-revenue',       `₦${totalRevenue.toLocaleString()}`);
+    set('ov-paid-listings', paidListings.length);
+    set('ov-free-listings', freeListings.length);
 
     // Badges
     const verifBadge  = profiles.filter(p => p.verification_status === 'pending').length;
