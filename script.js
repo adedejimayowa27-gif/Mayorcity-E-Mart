@@ -1582,6 +1582,21 @@ function bindListingEvents() {
     priceMaxInput?.addEventListener('input', () => { currentPage = 1; displayListings(); });
     sortSelect?.addEventListener('change', () => { currentPage = 1; displayListings(); });
 
+    document.getElementById('clear-filters-btn')?.addEventListener('click', () => {
+        if (searchBar) searchBar.value = '';
+        if (priceMinInput) priceMinInput.value = '';
+        if (priceMaxInput) priceMaxInput.value = '';
+        if (sortSelect) sortSelect.value = 'newest';
+        currentTab = 'all';
+        currentCategory = 'Show All';
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+        document.querySelector('.tab-btn[data-type="all"]')?.classList.add('active-tab');
+        document.querySelectorAll('#category-list li').forEach(l => l.classList.remove('active-cat'));
+        document.querySelector('#category-list li')?.classList.add('active-cat');
+        currentPage = 1;
+        displayListings();
+    });
+
     // Hero buttons
     document.getElementById('hero-explore-btn')?.addEventListener('click', () => {
         document.getElementById('featured-listings')?.scrollIntoView({ behavior: 'smooth' });
