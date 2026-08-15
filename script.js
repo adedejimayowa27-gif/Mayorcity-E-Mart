@@ -363,7 +363,7 @@ function updateAuthUI() {
         if (nameEl)  nameEl.textContent  = name;
         if (emailEl) emailEl.textContent = email;
 
-        if (adminLink) adminLink.style.display = isAdmin() ? '' : 'none';
+        if (adminLink) adminLink.style.display = isStaff() ? '' : 'none';
 
         // Verification-document banner — shown when the account has no
         // document on file yet. This covers the common case where email
