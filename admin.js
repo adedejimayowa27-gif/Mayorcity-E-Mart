@@ -488,8 +488,12 @@ async function suspendUser(userId, name, suspend) {
     if (!ok) return;
 
     const newStatus = suspend ? 'suspended' : 'verified';
-    const { error } = await supabase.from('profiles').update({ verification_status: newStatus }).eq('id', userId);
+    const { data, error } = await supabase.from('profiles').update({ verification_status: newStatus }).eq('id', userId).select();
     if (error) { showToast('Failed: ' + error.message, 'error'); return; }
+    if (!data?.length) {
+        showToast(`${action} was blocked by a database permission rule — no rows were actually changed.`, 'error');
+        return;
+    }
 
     await logAction(suspend ? 'SUSPEND_USER' : 'REACTIVATE_USER', 'user', userId, { name });
     showToast(`${name} has been ${suspend ? 'suspended' : 'reactivated'}.`, suspend ? 'warning' : 'success');
