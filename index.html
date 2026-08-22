@@ -28,6 +28,30 @@
   <!-- Toast notifications -->
   <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
 
+  <!-- Install App banner — shown at the very top the moment the browser offers installability -->
+  <div id="install-app-banner" style="display:none;">
+    <span id="install-app-banner-text">📲 Install Mayorcity E-Mart for a faster, app-like experience</span>
+    <div class="install-app-banner-actions">
+      <button type="button" id="install-app-btn">Install App</button>
+      <button type="button" id="install-app-dismiss" aria-label="Dismiss">✕</button>
+    </div>
+  </div>
+
+  <!-- iOS "Add to Home Screen" instructions modal (Safari has no install prompt API) -->
+  <div id="ios-install-modal" style="display:none;">
+    <div id="ios-install-modal-card">
+      <button type="button" id="ios-install-modal-close" aria-label="Close">✕</button>
+      <h3>Install Mayorcity E-Mart</h3>
+      <p>iPhone &amp; iPad don't support one-tap install, but adding it to your Home Screen takes a few seconds:</p>
+      <ol>
+        <li>Tap the <strong>Share</strong> icon <span class="ios-share-icon">⬆️</span> in Safari's toolbar</li>
+        <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+        <li>Tap <strong>Add</strong> in the top-right corner</li>
+      </ol>
+      <p class="ios-install-modal-note">That's it — the E-Mart icon will appear on your Home Screen like a regular app.</p>
+    </div>
+  </div>
+
   <!-- Top Navigation Header Bar -->
   <header>
     <div class="header-container">
@@ -548,9 +572,6 @@
   <!-- Floating Back to Top Arrow Component -->
   <button type="button" id="backToTopBtn" title="Go to top" style="display: none;">↑</button>
 
-  <!-- Install App button — shown when the browser offers installability -->
-  <button type="button" id="install-app-btn" style="display:none;">📲 Install App</button>
-
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="./config.js"></script>
   <script src="https://checkout.flutterwave.com/v3.js"></script>
@@ -562,28 +583,65 @@
       });
     }
 
-    // Custom Install App button — Chrome only shows its own install prompt
-    // automatically after unpredictable engagement signals, so we capture
-    // the event ourselves and offer an always-visible button instead.
+    // Custom Install App banner — Chrome/Android/Edge/etc. only show their own
+    // install prompt automatically after unpredictable engagement signals, so
+    // we capture the event ourselves and offer a prominent top banner instead,
+    // shown the moment a visitor lands on the site. iOS Safari has no install
+    // prompt API at all, so it gets step-by-step "Add to Home Screen" instructions.
     let deferredInstallPrompt = null;
+    const installBanner = document.getElementById('install-app-banner');
+    const installBannerText = document.getElementById('install-app-banner-text');
     const installBtn = document.getElementById('install-app-btn');
+    const installDismissBtn = document.getElementById('install-app-dismiss');
+    const iosInstallModal = document.getElementById('ios-install-modal');
+    const iosInstallModalClose = document.getElementById('ios-install-modal-close');
+    const installBannerDismissed = sessionStorage.getItem('installBannerDismissed') === '1';
+
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+
+    if (isIos && !isInStandaloneMode && !installBannerDismissed) {
+      // Safari never fires beforeinstallprompt — show the banner right away
+      // and point tapping it to instructions instead of a native prompt.
+      if (installBannerText) installBannerText.textContent = '📲 Add Mayorcity E-Mart to your Home Screen for a faster, app-like experience';
+      if (installBtn) installBtn.textContent = 'How to Install';
+      if (installBanner) installBanner.style.display = 'flex';
+    }
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstallPrompt = e;
-      if (installBtn) installBtn.style.display = 'block';
+      if (installBanner && !installBannerDismissed) installBanner.style.display = 'flex';
     });
 
     installBtn?.addEventListener('click', async () => {
+      if (isIos) {
+        if (iosInstallModal) iosInstallModal.style.display = 'flex';
+        return;
+      }
       if (!deferredInstallPrompt) return;
       deferredInstallPrompt.prompt();
       await deferredInstallPrompt.userChoice;
       deferredInstallPrompt = null;
-      installBtn.style.display = 'none';
+      if (installBanner) installBanner.style.display = 'none';
+    });
+
+    installDismissBtn?.addEventListener('click', () => {
+      if (installBanner) installBanner.style.display = 'none';
+      sessionStorage.setItem('installBannerDismissed', '1');
+    });
+
+    iosInstallModalClose?.addEventListener('click', () => {
+      if (iosInstallModal) iosInstallModal.style.display = 'none';
+    });
+
+    iosInstallModal?.addEventListener('click', (e) => {
+      if (e.target === iosInstallModal) iosInstallModal.style.display = 'none';
     });
 
     window.addEventListener('appinstalled', () => {
-      if (installBtn) installBtn.style.display = 'none';
+      if (installBanner) installBanner.style.display = 'none';
     });
   </script>
 </body>
