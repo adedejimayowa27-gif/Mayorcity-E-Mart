@@ -82,7 +82,11 @@ function injectWidgetMarkup() {
   launcher.type = 'button';
   launcher.id = 'assistant-launcher';
   launcher.setAttribute('aria-label', 'Open support chat');
-  launcher.textContent = '💬';
+  launcher.setAttribute('aria-expanded', 'false');
+  launcher.innerHTML = `
+    <span id="assistant-launcher-icon">💬</span>
+    <span id="assistant-launcher-label">AI Assistant</span>
+  `;
   document.body.appendChild(launcher);
 
   const panel = document.createElement('div');
@@ -115,6 +119,7 @@ function appendMessage(container, role, text) {
 
 function initWidget() {
   const { launcher, panel } = injectWidgetMarkup();
+  const launcherIcon = launcher.querySelector('#assistant-launcher-icon');
   const messagesEl = panel.querySelector('#assistant-messages');
   const formEl = panel.querySelector('#assistant-form');
   const inputEl = panel.querySelector('#assistant-input');
@@ -124,19 +129,31 @@ function initWidget() {
   let contextPromise = null;
   let greeted = false;
 
-  launcher.addEventListener('click', () => {
-    panel.hidden = !panel.hidden;
-    if (!panel.hidden) {
-      if (!contextPromise) contextPromise = getUserContext();
-      if (!greeted) {
-        greeted = true;
-        appendMessage(messagesEl, 'assistant', "Hi! Ask me things like \"why can't I list an item?\" or \"why is my payment stuck?\" — I'll check your account status.");
-      }
-      inputEl.focus();
+  function openPanel() {
+    panel.hidden = false;
+    launcher.setAttribute('aria-expanded', 'true');
+    launcher.setAttribute('aria-label', 'Close support chat');
+    if (launcherIcon) launcherIcon.textContent = '✕';
+    if (!contextPromise) contextPromise = getUserContext();
+    if (!greeted) {
+      greeted = true;
+      appendMessage(messagesEl, 'assistant', "Hi! Ask me things like \"why can't I list an item?\" or \"why is my payment stuck?\" — I'll check your account status.");
     }
+    inputEl.focus();
+  }
+
+  function closePanel() {
+    panel.hidden = true;
+    launcher.setAttribute('aria-expanded', 'false');
+    launcher.setAttribute('aria-label', 'Open support chat');
+    if (launcherIcon) launcherIcon.textContent = '💬';
+  }
+
+  launcher.addEventListener('click', () => {
+    if (panel.hidden) openPanel(); else closePanel();
   });
 
-  closeBtn.addEventListener('click', () => { panel.hidden = true; });
+  closeBtn.addEventListener('click', closePanel);
 
   formEl.addEventListener('submit', async (e) => {
     e.preventDefault();
