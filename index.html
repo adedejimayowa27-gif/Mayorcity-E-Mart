@@ -602,7 +602,9 @@
     const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true;
 
-    if (isIos && !isInStandaloneMode && !installBannerDismissed) {
+    if (isInStandaloneMode) {
+      // Already running as an installed app — never show the install banner.
+    } else if (isIos && !installBannerDismissed) {
       // Safari never fires beforeinstallprompt — show the banner right away
       // and point tapping it to instructions instead of a native prompt.
       if (installBannerText) installBannerText.textContent = '📲 Add Mayorcity E-Mart to your Home Screen for a faster, app-like experience';
@@ -613,7 +615,7 @@
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstallPrompt = e;
-      if (installBanner && !installBannerDismissed) installBanner.style.display = 'flex';
+      if (installBanner && !installBannerDismissed && !isInStandaloneMode) installBanner.style.display = 'flex';
     });
 
     installBtn?.addEventListener('click', async () => {
