@@ -1374,7 +1374,7 @@ footer {
 /* --- Support Assistant Chat Widget (assistant.js) --- */
 #assistant-launcher {
   position: fixed;
-  bottom: 24px;
+  bottom: 90px;
   right: 24px;
   z-index: 998;
   width: 56px;
@@ -1393,7 +1393,7 @@ footer {
 }
 #assistant-panel {
   position: fixed;
-  bottom: 92px;
+  bottom: 158px;
   right: 24px;
   z-index: 998;
   width: 340px;
@@ -1406,6 +1406,13 @@ footer {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+/* The [hidden] attribute normally sets display:none via the browser's default
+   stylesheet, but that default rule has LOWER specificity than the #assistant-panel
+   rule above, so our own `display: flex` was winning and the panel stayed visible
+   even when assistant.js set panel.hidden = true. This rule restores hidden's effect. */
+#assistant-panel[hidden] {
+  display: none;
 }
 #assistant-panel-header {
   background: linear-gradient(135deg, #1d4ed8, #7c3aed);
@@ -1485,6 +1492,6 @@ footer {
   background: #7c3aed;
 }
 @media (max-width: 480px) {
-  #assistant-panel { right: 16px; bottom: 88px; width: calc(100vw - 32px); }
-  #assistant-launcher { right: 16px; }
+  #assistant-panel { right: 16px; bottom: 154px; width: calc(100vw - 32px); }
+  #assistant-launcher { right: 16px; bottom: 90px; }
 }
