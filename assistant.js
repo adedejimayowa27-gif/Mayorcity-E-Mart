@@ -38,7 +38,11 @@ Ground rules:
   itself (Supabase Row Level Security), not just a suggestion.
 - If no verification/payment status was provided below, it means the user isn't signed in or
   the data wasn't available — ask them to make sure they're signed in, rather than guessing.
-- Never invent order numbers, dates, or amounts you were not given.`;
+- Never invent order numbers, dates, or amounts you were not given.
+- Plain text only. Do NOT use markdown — no **bold**, no _italics_, no # headings, no
+  bullet dashes/asterisks. This chat bubble displays raw text, so markdown syntax would
+  show up as literal asterisks/hashes instead of formatting. Use plain sentences or a
+  simple numbered list (1., 2., 3.) if you need structure.`;
 
 function buildSystemPrompt(context) {
   if (!context) return SYSTEM_PROMPT_BASE;
@@ -118,10 +122,24 @@ function injectWidgetMarkup() {
   return { launcher, panel };
 }
 
+// Safety net: strip stray markdown syntax from the model's reply in case it ignores the
+// "plain text only" system prompt rule. This bubble renders text as plain text (textContent),
+// so unstripped markdown would otherwise show up as literal **, _, #, etc.
+function stripMarkdown(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')   // **bold**
+    .replace(/__(.*?)__/g, '$1')       // __bold__
+    .replace(/\*(.*?)\*/g, '$1')       // *italic*
+    .replace(/_(.*?)_/g, '$1')         // _italic_
+    .replace(/^#{1,6}\s+/gm, '')       // # headings
+    .replace(/^[-*]\s+/gm, '• ')       // - bullets / * bullets -> plain bullet
+    .replace(/\*/g, '');               // any leftover stray asterisks
+}
+
 function appendMessage(container, role, text) {
   const bubble = document.createElement('div');
   bubble.className = `assistant-msg assistant-msg-${role}`;
-  bubble.textContent = text;
+  bubble.textContent = role === 'assistant' ? stripMarkdown(text) : text;
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
   return bubble;
