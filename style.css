@@ -1377,23 +1377,35 @@ footer {
   bottom: 90px;
   right: 24px;
   z-index: 998;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px 13px 16px;
+  border-radius: 32px;
   border: none;
   background: linear-gradient(135deg, #1d4ed8, #7c3aed);
   color: #fff;
-  font-size: 24px;
   box-shadow: 0 6px 18px rgba(29, 78, 216, 0.4);
   cursor: pointer;
   transition: transform 0.15s ease;
+}
+#assistant-launcher-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+#assistant-launcher-label {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 #assistant-launcher:hover {
   transform: translateY(-3px);
 }
 #assistant-panel {
   position: fixed;
-  bottom: 158px;
+  bottom: 152px;
   right: 24px;
   z-index: 998;
   width: 340px;
@@ -1492,6 +1504,7 @@ footer {
   background: #7c3aed;
 }
 @media (max-width: 480px) {
-  #assistant-panel { right: 16px; bottom: 154px; width: calc(100vw - 32px); }
-  #assistant-launcher { right: 16px; bottom: 90px; }
+  #assistant-panel { right: 16px; bottom: 148px; width: calc(100vw - 32px); }
+  #assistant-launcher { right: 16px; bottom: 90px; padding: 11px 16px 11px 14px; }
+  #assistant-launcher-label { font-size: 13px; }
 }
