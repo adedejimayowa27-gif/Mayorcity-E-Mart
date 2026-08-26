@@ -483,11 +483,16 @@ function showAuthError(panelId, msg) {
 // ═══════════════════════════════════════════════════════════════════════
 async function loadListings() {
     if (productsGrid) {
-        productsGrid.innerHTML = `
-            <div class="products-loading">
-                <div class="loading-spinner"></div>
-                <p>Loading listings…</p>
-            </div>`;
+        productsGrid.innerHTML = Array.from({ length: 6 }).map(() => `
+            <div class="product-card skeleton-card">
+                <div class="skeleton-badge"></div>
+                <div class="skeleton-img"></div>
+                <div class="skeleton-line skeleton-title"></div>
+                <div class="skeleton-line skeleton-seller"></div>
+                <div class="skeleton-line skeleton-price"></div>
+                <div class="skeleton-line skeleton-desc"></div>
+                <div class="skeleton-btn"></div>
+            </div>`).join('');
     }
 
     const statusFilter = isStaff() ? ['Active','Sold','Hidden'] : ['Active','Sold'];
@@ -2121,3 +2126,30 @@ async function init() {
 }
 
 init();
+
+// ═══════════════════════════════════════════════════════════════════════
+// ADDED — Dark mode toggle (self-contained, doesn't touch existing state)
+// ═══════════════════════════════════════════════════════════════════════
+(function initThemeToggle() {
+    const THEME_KEY = 'emart-theme';
+    const toggleBtn = document.getElementById('theme-toggle-btn');
+    if (!toggleBtn) return;
+
+    const applyIcon = () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        toggleBtn.textContent = isDark ? '☀️' : '🌙';
+    };
+    applyIcon(); // sync icon with theme already applied by the inline <head> script
+
+    toggleBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+            document.documentElement.removeAttribute('data-theme');
+            try { localStorage.setItem(THEME_KEY, 'light'); } catch (e) {}
+        } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            try { localStorage.setItem(THEME_KEY, 'dark'); } catch (e) {}
+        }
+        applyIcon();
+    });
+})();
