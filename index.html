@@ -22,6 +22,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="E-Mart">
   <link rel="stylesheet" href="./style.css">
+  <script>
+    // Applied inline (before CSS paints) so switching themes never causes a
+    // flash of the wrong theme on load. Reads the same key script.js writes to.
+    (function () {
+      try {
+        const saved = localStorage.getItem('emart-theme');
+        if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) { /* localStorage unavailable — default light theme is fine */ }
+    })();
+  </script>
 </head>
 <body>
 
@@ -61,6 +71,7 @@
         <a href="#featured-listings" class="nav-link active">Home</a>
         <a href="#about" class="nav-link">About Us</a>
         <a href="#contact" class="nav-link">Contact Hub</a>
+        <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
         <button type="button" id="nav-lf-btn" class="nav-lf-btn">🔎 Lost &amp; Found</button>
         <a href="./admin.html" id="nav-admin-link" class="nav-admin-link" style="display:none;">🔐 Admin</a>
 
