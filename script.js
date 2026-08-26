@@ -599,7 +599,7 @@ function displayListings() {
     const startIdx = (currentPage - 1) * LISTINGS_PER_PAGE;
     const pageItems = filtered.slice(startIdx, startIdx + LISTINGS_PER_PAGE);
 
-    productsGrid.innerHTML = pageItems.map(listing => {
+    productsGrid.innerHTML = pageItems.map((listing, cardIndex) => {
         const isLost       = listing.type === 'Lost';
         const displayPrice = isLost ? 'Contact for details' : `₦${Number(listing.price || 0).toLocaleString()}`;
         const img          = listing.image_url || 'https://placehold.co/400x200?text=No+Image';
@@ -621,7 +621,7 @@ function displayListings() {
         const dateText = listing.date_lost_found ? `📅 ${formatDate(listing.date_lost_found)}` : '';
 
         return `
-        <div class="product-card${listing.status === 'Hidden' ? ' card-hidden' : ''}${isLost ? ' card-lf' : ''}">
+        <div class="product-card${listing.status === 'Hidden' ? ' card-hidden' : ''}${isLost ? ' card-lf' : ''}" style="animation-delay:${Math.min(cardIndex * 40, 400)}ms">
             <div class="card-badges">${buildBadges(listing)}</div>
             <div class="card-image-wrap">
                 <img src="${img}" alt="${listing.product_name || 'Product'}" loading="lazy">
