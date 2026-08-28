@@ -594,7 +594,7 @@ function displayListings() {
     // 'newest' needs no re-sort — allListings already comes ordered that way.
 
     if (filtered.length === 0) {
-        productsGrid.innerHTML = "<p class='no-results-msg'>No items found matching the selected criteria.</p>";
+        renderEmptyState();
         renderPaginationControls(0);
         return;
     }
@@ -604,53 +604,125 @@ function displayListings() {
     const startIdx = (currentPage - 1) * LISTINGS_PER_PAGE;
     const pageItems = filtered.slice(startIdx, startIdx + LISTINGS_PER_PAGE);
 
-    productsGrid.innerHTML = pageItems.map((listing, cardIndex) => {
-        const isLost       = listing.type === 'Lost';
-        const displayPrice = isLost ? 'Contact for details' : `₦${Number(listing.price || 0).toLocaleString()}`;
-        const img          = listing.image_url || 'https://placehold.co/400x200?text=No+Image';
-        const isOwner      = currentUser && listing.user_id === currentUser.id;
-        const showEdit     = canEditListing(listing);
-        const showDelete   = canDeleteListing(listing);
-
-        const waNumber = formatWhatsAppNumber(listing.seller_whatsapp);
-        const lfMsgText = isLost
-            ? encodeURIComponent(`Hello, I saw your ${listing.lost_or_found === 'Found' ? 'FOUND' : 'LOST'} item report for "${listing.product_name}" on Mayorcity E-Mart. I'd like to help!`)
-            : '';
-        const lfWaLink = `https://wa.me/${waNumber}?text=${lfMsgText}`;
-
-        const marketMsgText = !isLost
-            ? encodeURIComponent(`Hello, I'm interested in your "${listing.product_name}" listing on Mayorcity E-Mart (${displayPrice}). Is it still available?`)
-            : '';
-        const marketWaLink = `https://wa.me/${waNumber}?text=${marketMsgText}`;
-        const locationText = listing.location ? `📍 ${listing.location}` : '';
-        const dateText = listing.date_lost_found ? `📅 ${formatDate(listing.date_lost_found)}` : '';
-
-        return `
-        <div class="product-card${listing.status === 'Hidden' ? ' card-hidden' : ''}${isLost ? ' card-lf' : ''}" style="animation-delay:${Math.min(cardIndex * 40, 400)}ms">
-            <div class="card-badges">${buildBadges(listing)}</div>
-            <div class="card-image-wrap">
-                <img src="${img}" alt="${listing.product_name || 'Product'}" loading="lazy">
-            </div>
-            <div class="card-body">
-                <h3 class="card-title">${listing.product_name || 'Untitled'}</h3>
-                <p class="card-seller">👤 ${listing.seller_name || 'Anonymous'}${listing._profile?.verification_status === 'verified' ? ' <span class="inline-verified">✓</span>' : ''}</p>
-                ${isLost && locationText ? `<p class="card-location">${locationText}</p>` : ''}
-                ${isLost && dateText     ? `<p class="card-lf-date">${dateText}</p>`      : ''}
-                ${!isLost ? `<p class="card-price">${displayPrice}</p>` : ''}
-                <p class="card-desc">${listing.description ? listing.description.substring(0, 80) + '…' : 'No details.'}</p>
-            </div>
-            <div class="card-actions">
-                <button type="button" class="view-btn" data-id="${listing.id}">View Details</button>
-                <a href="${isLost ? lfWaLink : marketWaLink}" target="_blank" rel="noopener noreferrer" class="card-wa-btn">💬 WhatsApp ${isLost ? '' : 'Seller'}</a>
-                <div class="card-secondary-actions">
-                    ${showEdit   ? `<button type="button" class="edit-btn"   data-id="${listing.id}">Edit</button>`   : ''}
-                    ${showDelete ? `<button type="button" class="delete-btn" data-id="${listing.id}">Delete</button>` : ''}
-                </div>
-            </div>
-        </div>`;
-    }).join('');
+    productsGrid.innerHTML = pageItems.map((listing, cardIndex) => buildListingCard(listing, cardIndex)).join('');
 
     renderPaginationControls(totalPages);
+}
+
+// Resets every filter/search/sort control back to its default and re-renders.
+// Shared by the header "Clear Filters" button and the empty-state's own
+// "Clear All Filters" button so there's one source of truth for what "reset" means.
+function resetAllFilters() {
+    if (searchBar) searchBar.value = '';
+    if (priceMinInput) priceMinInput.value = '';
+    if (priceMaxInput) priceMaxInput.value = '';
+    if (sortSelect) sortSelect.value = 'newest';
+    currentTab = 'all';
+    currentCategory = 'Show All';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
+    document.querySelector('.tab-btn[data-type="all"]')?.classList.add('active-tab');
+    document.querySelectorAll('#category-list li').forEach(l => l.classList.remove('active-cat'));
+    document.querySelector('#category-list li')?.classList.add('active-cat');
+    currentPage = 1;
+    displayListings();
+}
+
+// Renders a single product card. Pulled out of displayListings() so the
+// "you might like" suggestions in the empty state can reuse the exact same
+// markup instead of duplicating it.
+function buildListingCard(listing, cardIndex = 0) {
+    const isLost       = listing.type === 'Lost';
+    const displayPrice = isLost ? 'Contact for details' : `₦${Number(listing.price || 0).toLocaleString()}`;
+    const img          = listing.image_url || 'https://placehold.co/400x200?text=No+Image';
+    const showEdit     = canEditListing(listing);
+    const showDelete   = canDeleteListing(listing);
+
+    const waNumber = formatWhatsAppNumber(listing.seller_whatsapp);
+    const lfMsgText = isLost
+        ? encodeURIComponent(`Hello, I saw your ${listing.lost_or_found === 'Found' ? 'FOUND' : 'LOST'} item report for "${listing.product_name}" on Mayorcity E-Mart. I'd like to help!`)
+        : '';
+    const lfWaLink = `https://wa.me/${waNumber}?text=${lfMsgText}`;
+
+    const marketMsgText = !isLost
+        ? encodeURIComponent(`Hello, I'm interested in your "${listing.product_name}" listing on Mayorcity E-Mart (${displayPrice}). Is it still available?`)
+        : '';
+    const marketWaLink = `https://wa.me/${waNumber}?text=${marketMsgText}`;
+    const locationText = listing.location ? `📍 ${listing.location}` : '';
+    const dateText = listing.date_lost_found ? `📅 ${formatDate(listing.date_lost_found)}` : '';
+
+    return `
+    <div class="product-card${listing.status === 'Hidden' ? ' card-hidden' : ''}${isLost ? ' card-lf' : ''}" style="animation-delay:${Math.min(cardIndex * 40, 400)}ms">
+        <div class="card-badges">${buildBadges(listing)}</div>
+        <div class="card-image-wrap">
+            <img src="${img}" alt="${listing.product_name || 'Product'}" loading="lazy">
+        </div>
+        <div class="card-body">
+            <h3 class="card-title">${listing.product_name || 'Untitled'}</h3>
+            <p class="card-seller">👤 ${listing.seller_name || 'Anonymous'}${listing._profile?.verification_status === 'verified' ? ' <span class="inline-verified">✓</span>' : ''}</p>
+            ${isLost && locationText ? `<p class="card-location">${locationText}</p>` : ''}
+            ${isLost && dateText     ? `<p class="card-lf-date">${dateText}</p>`      : ''}
+            ${!isLost ? `<p class="card-price">${displayPrice}</p>` : ''}
+            <p class="card-desc">${listing.description ? listing.description.substring(0, 80) + '…' : 'No details.'}</p>
+        </div>
+        <div class="card-actions">
+            <button type="button" class="view-btn" data-id="${listing.id}">View Details</button>
+            <a href="${isLost ? lfWaLink : marketWaLink}" target="_blank" rel="noopener noreferrer" class="card-wa-btn">💬 WhatsApp ${isLost ? '' : 'Seller'}</a>
+            <div class="card-secondary-actions">
+                ${showEdit   ? `<button type="button" class="edit-btn"   data-id="${listing.id}">Edit</button>`   : ''}
+                ${showDelete ? `<button type="button" class="delete-btn" data-id="${listing.id}">Delete</button>` : ''}
+            </div>
+        </div>
+    </div>`;
+}
+
+// Picks a small set of listings to show as "you might like" suggestions when
+// a search/filter combo returns nothing. Prefers items in the same category
+// (loosening price/search/tab), then falls back to the newest active listings
+// site-wide so the empty state never dead-ends the user.
+function getSuggestedListings(limit = 4) {
+    const pool = allListings.filter(l => !isExpired(l) && l.status !== 'Hidden' && l.type !== 'Lost');
+
+    let suggestions = [];
+    if (currentCategory !== 'Show All') {
+        suggestions = pool.filter(l => l.category === currentCategory);
+    }
+    if (suggestions.length < limit) {
+        const seen = new Set(suggestions.map(l => l.id));
+        for (const l of pool) {
+            if (suggestions.length >= limit) break;
+            if (!seen.has(l.id)) { suggestions.push(l); seen.add(l.id); }
+        }
+    }
+    return suggestions.slice(0, limit);
+}
+
+function renderEmptyState() {
+    const suggestions = getSuggestedListings(4);
+
+    let html = `
+    <div class="empty-state">
+        <div class="empty-state-icon">🔍</div>
+        <h3 class="empty-state-title">No items match your filters</h3>
+        <p class="empty-state-text">Try a broader search term or widen your price range.</p>
+        <button type="button" id="empty-state-clear-btn" class="clear-filters-btn">✕ Clear All Filters</button>
+    </div>`;
+
+    if (suggestions.length > 0) {
+        html += `
+        <div class="suggested-section">
+            <h4 class="suggested-heading">You might like these instead</h4>
+            <div class="suggested-grid">
+                ${suggestions.map((listing, i) => buildListingCard(listing, i)).join('')}
+            </div>
+        </div>`;
+    }
+
+    productsGrid.innerHTML = html;
+
+    // Note: .view-btn/.edit-btn/.delete-btn clicks on the suggested cards are
+    // already handled by the delegated click listener on productsGrid — no
+    // extra wiring needed here.
+    document.getElementById('empty-state-clear-btn')?.addEventListener('click', resetAllFilters);
 }
 
 function renderPaginationControls(totalPages) {
@@ -1605,20 +1677,7 @@ function bindListingEvents() {
     priceMaxInput?.addEventListener('input', () => { currentPage = 1; displayListings(); });
     sortSelect?.addEventListener('change', () => { currentPage = 1; displayListings(); });
 
-    document.getElementById('clear-filters-btn')?.addEventListener('click', () => {
-        if (searchBar) searchBar.value = '';
-        if (priceMinInput) priceMinInput.value = '';
-        if (priceMaxInput) priceMaxInput.value = '';
-        if (sortSelect) sortSelect.value = 'newest';
-        currentTab = 'all';
-        currentCategory = 'Show All';
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab'));
-        document.querySelector('.tab-btn[data-type="all"]')?.classList.add('active-tab');
-        document.querySelectorAll('#category-list li').forEach(l => l.classList.remove('active-cat'));
-        document.querySelector('#category-list li')?.classList.add('active-cat');
-        currentPage = 1;
-        displayListings();
-    });
+    document.getElementById('clear-filters-btn')?.addEventListener('click', resetAllFilters);
 
     // Hero buttons
     document.getElementById('hero-explore-btn')?.addEventListener('click', () => {
