@@ -906,7 +906,10 @@ function collectListingFeePayment(email, name, phone) {
             tx_ref: txRef,
             amount: 200, // ₦200 — Flutterwave amounts are whole Naira, not kobo
             currency: 'NGN',
-            payment_options: 'card, banktransfer, ussd, mobilemoney',
+            // Order matters here — Flutterwave's popup opens with the first
+            // listed method as the active tab. Most buyers pay by bank
+            // transfer rather than card, so transfer leads.
+            payment_options: 'banktransfer, card, ussd, mobilemoney',
             customer: { email, name: name || email, phone_number: phone || '' },
             customizations: {
                 title: 'Mayorcity E-Mart',
