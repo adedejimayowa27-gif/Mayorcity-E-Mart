@@ -586,7 +586,10 @@
 
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="./config.js"></script>
-  <script src="https://checkout.flutterwave.com/v3.js"></script>
+  <!-- Flutterwave Inline (v3.js) removed — payments now go through Standard
+       Checkout via a Supabase Edge Function + full-page redirect, which
+       doesn't depend on this script. See script.js's postListing() /
+       handlePendingPaymentReturn(). -->
   <script type="module" src="./script.js"></script>
   <script type="module" src="./assistant.js"></script>
   <script>
