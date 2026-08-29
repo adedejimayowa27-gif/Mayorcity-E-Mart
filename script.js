@@ -802,18 +802,19 @@ async function postListing(formData, imageFile) {
 
     // ── Marketplace ("For Sale") listing ──
     // A user's very first Market listing is free, forever — every one after
-    // that costs ₦200. We check how many Market listings this user already
-    // has; if zero, we skip payment and insert directly. This free path is
-    // also enforced by a database (RLS) rule — see the SQL note shipped
-    // alongside this file — so it can't be bypassed by editing this script
-    // in the browser and re-submitting.
-    const { data: priorMarketRows, error: countErr } = await supabase
-        .from('listings')
-        .select('id')
-        .eq('user_id', currentUser.id)
-        .eq('type', 'Market');
+    // that costs ₦200. Eligibility is read from profiles.used_free_listing —
+    // a flag that's set once and never cleared, so it can't be re-earned by
+    // deleting a listing. The real gate is a database trigger (see
+    // fix-free-listing-bug.sql); this client-side read is just so we know
+    // whether to show the payment popup at all, and always defers to
+    // whatever the trigger actually decides below.
+    const { data: profileRow, error: profileErr } = await supabase
+        .from('profiles')
+        .select('used_free_listing')
+        .eq('id', currentUser.id)
+        .single();
 
-    const isFirstFreeListing = !countErr && (priorMarketRows?.length || 0) === 0;
+    const isFirstFreeListing = !profileErr && profileRow?.used_free_listing === false;
 
     if (isFirstFreeListing) {
         const { error } = await supabase.from('listings').insert({
@@ -833,15 +834,17 @@ async function postListing(formData, imageFile) {
             // was let through free as the user's first one, not paid for.
             payment_ref:     'FREE_FIRST_LISTING'
         });
-        // If the free-listing RLS rule rejects this (e.g. the count check
-        // above was stale, or this account already used its free listing),
-        // fall through to the normal paid flow below instead of failing.
+        // The DB trigger is the real gate (see fix-free-listing-bug.sql) — if
+        // it rejects this (e.g. this account already used its free listing,
+        // or the profile read above was stale), fall through to the normal
+        // paid flow below instead of failing outright.
         if (!error) return;
         console.warn('Free first-listing insert failed, falling back to paid flow:', error?.message || error);
     }
-    if (countErr) {
-        console.warn('Free first-listing count check failed, falling back to paid flow:', countErr?.message || countErr);
+    if (profileErr) {
+        console.warn('Free-listing eligibility check failed, falling back to paid flow:', profileErr?.message || profileErr);
     }
+
 
     // ── Every listing after the first — requires the ₦200 posting fee ──
     // 1. Collect payment client-side via Flutterwave Inline (public key only —
