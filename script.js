@@ -2212,3 +2212,56 @@ init();
         applyIcon();
     });
 })();
+
+// ═══════════════════════════════════════════════════════════════════════
+// ADDED — In-app refresh button. Since installed PWAs have no browser
+// chrome (no pull-to-refresh / reload button on most desktops), this gives
+// users a manual way to re-fetch live listings and pick up any newly
+// deployed site update.
+// ═══════════════════════════════════════════════════════════════════════
+(function initRefreshButton() {
+    const refreshBtn = document.getElementById('refresh-app-btn');
+    if (!refreshBtn) return;
+
+    let refreshing = false;
+
+    refreshBtn.addEventListener('click', async () => {
+        if (refreshing) return;
+        refreshing = true;
+        refreshBtn.classList.add('is-refreshing');
+        refreshBtn.disabled = true;
+
+        try {
+            // Re-fetch live listings from Supabase right away.
+            await loadListings();
+
+            // Ask the service worker to check for a newer deployed version in
+            // the background. If it finds one, do a full reload so the user
+            // actually gets the new HTML/CSS/JS instead of staying on stale
+            // cached files.
+            if ('serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg) {
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        newWorker?.addEventListener('statechange', () => {
+                            if (newWorker.state === 'activated') {
+                                showToast('Updated to the latest version. Reloading…', 'success');
+                                setTimeout(() => window.location.reload(), 800);
+                            }
+                        });
+                    });
+                    reg.update().catch(() => {});
+                }
+            }
+
+            showToast('Refreshed!', 'success');
+        } catch (e) {
+            showToast('Refresh failed. Check your connection.', 'error');
+        } finally {
+            refreshBtn.classList.remove('is-refreshing');
+            refreshBtn.disabled = false;
+            refreshing = false;
+        }
+    });
+})();
