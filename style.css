@@ -1757,3 +1757,25 @@ footer {
   line-height: 1;
 }
 .theme-toggle-btn:hover { background: rgba(255,255,255,0.12); transform: none; }
+
+/* Refresh button — same pill style as the theme toggle, sits right beside it */
+.refresh-app-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #fff;
+  font-size: 16px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  box-shadow: none;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.refresh-app-btn:hover { background: rgba(255,255,255,0.12); transform: none; }
+.refresh-app-btn:disabled { opacity: 0.6; cursor: default; }
+.refresh-app-btn.is-refreshing { animation: refreshSpin 0.8s linear infinite; }
+@keyframes refreshSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .refresh-app-btn.is-refreshing { animation: none; }
+}
