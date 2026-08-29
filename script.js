@@ -847,86 +847,128 @@ async function postListing(formData, imageFile) {
 
 
     // ── Every listing after the first — requires the ₦200 posting fee ──
-    // 1. Collect payment client-side via Flutterwave Inline (public key only —
-    //    safe to expose in the browser).
-    const { transactionId, txRef } = await collectListingFeePayment(currentUser.email, formData.seller, formData.whatsapp);
+    // Payment now goes through Flutterwave Standard Checkout: a Supabase
+    // Edge Function creates the payment server-side (using the SECRET key,
+    // never exposed to the browser) and hands back a hosted Flutterwave
+    // payment page to redirect to. This replaces the old client-side
+    // FlutterwaveCheckout() popup (Flutterwave Inline), whose bundled
+    // checkout script started 404ing and left users stuck on an infinite
+    // spinner with no way to pay.
+    //
+    // Because paying means leaving the page entirely, the listing can't be
+    // sent to verify-and-post-listing yet — it's stashed in sessionStorage
+    // and only submitted once the user is back and Flutterwave confirms the
+    // payment (see handlePendingPaymentReturn(), called from init()).
+    const txRef = 'EMART-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+    const pendingListing = {
+        product_name:    formData.productName,
+        category:        formData.productCategory,
+        price:           formData.price || 0,
+        description:     formData.description,
+        image_url:       imageUrl,
+        seller_name:     formData.seller,
+        seller_whatsapp: formData.whatsapp
+    };
+    sessionStorage.setItem('emart_pending_payment', JSON.stringify({ txRef, listing: pendingListing }));
 
-    // 2. Hand the transaction id + listing data to the verify-and-post-listing
-    //    Edge Function. It re-checks the payment with Flutterwave's SECRET key
-    //    (never exposed to the browser) and only then creates the listing,
-    //    using the service role. Direct client inserts for Market listings
-    //    are blocked by RLS — this Edge Function is the only path that can
-    //    create one, so the fee can't be bypassed from the browser console.
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
     if (!token) throw new Error('Your session expired — please sign in again.');
 
-    const res = await fetch(`${window.SUPABASE_URL}/functions/v1/verify-and-post-listing`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'apikey': window.SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({
-            transaction_id: transactionId,
-            tx_ref: txRef,
-            listing: {
-                product_name:    formData.productName,
-                category:        formData.productCategory,
-                price:           formData.price || 0,
-                description:     formData.description,
-                image_url:       imageUrl,
-                seller_name:     formData.seller,
-                seller_whatsapp: formData.whatsapp
-            }
-        })
-    });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok || result.error) {
-        throw new Error(result.error || 'Payment was received but the listing could not be created. Please contact support with your payment reference: ' + txRef);
+    let paymentLink;
+    try {
+        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/create-payment-link`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'apikey': window.SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+                tx_ref: txRef,
+                redirect_url: window.location.origin + window.location.pathname
+            })
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || result.error || !result.link) {
+            throw new Error(result.error || 'Could not start payment.');
+        }
+        paymentLink = result.link;
+    } catch (err) {
+        sessionStorage.removeItem('emart_pending_payment');
+        throw new Error('Payment could not be started: ' + err.message);
     }
+
+    // Full-page redirect to Flutterwave's hosted payment page. Tell the
+    // caller we're redirecting (not actually done posting yet) so the
+    // submit handler doesn't show a premature "published!" toast.
+    window.location.href = paymentLink;
+    return { redirecting: true };
 }
 
-// Opens the Flutterwave Inline popup for the ₦200 listing fee.
-// Resolves with { transactionId, txRef } on success; rejects if the user
-// closes the popup or Flutterwave isn't configured/loaded.
-function collectListingFeePayment(email, name, phone) {
-    return new Promise((resolve, reject) => {
-        if (!window.FlutterwaveCheckout) {
-            reject(new Error('Payment system failed to load. Please check your connection and try again.'));
-            return;
-        }
-        if (!window.FLUTTERWAVE_PUBLIC_KEY) {
-            reject(new Error('Payments are not configured yet. Please contact the site admin.'));
-            return;
-        }
-        const txRef = 'EMART-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-        let settled = false;
+// Runs once on page load. If the user is coming back from a Flutterwave
+// Standard Checkout redirect (?status=...&tx_ref=...&transaction_id=...),
+// confirms the payment and posts the listing that was stashed in
+// sessionStorage before the redirect. Safe to call even when there's
+// nothing pending — it's a no-op in that case.
+async function handlePendingPaymentReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
+    const transactionId = params.get('transaction_id');
+    const txRef = params.get('tx_ref');
+    if (!status || !transactionId) return; // not a payment return — nothing to do
 
-        FlutterwaveCheckout({
-            public_key: window.FLUTTERWAVE_PUBLIC_KEY,
-            tx_ref: txRef,
-            amount: 200, // ₦200 — Flutterwave amounts are whole Naira, not kobo
-            currency: 'NGN',
-            // Order matters here — Flutterwave's popup opens with the first
-            // listed method as the active tab. Most buyers pay by bank
-            // transfer rather than card, so transfer leads.
-            payment_options: 'banktransfer, card, ussd, mobilemoney',
-            customer: { email, name: name || email, phone_number: phone || '' },
-            customizations: {
-                title: 'Mayorcity E-Mart',
-                description: 'Marketplace listing fee'
+    // Strip the payment params from the URL right away so a refresh doesn't
+    // re-trigger this.
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    const pendingRaw = sessionStorage.getItem('emart_pending_payment');
+    sessionStorage.removeItem('emart_pending_payment');
+
+    if (status !== 'successful') {
+        showToast(status === 'cancelled' ? 'Payment was cancelled.' : 'Payment was not completed.', 'warning');
+        return;
+    }
+    if (!pendingRaw) {
+        showToast('Payment received, but your listing details were lost (e.g. a different browser/tab). Please contact support with reference: ' + (txRef || transactionId), 'error', 10000);
+        return;
+    }
+
+    let pending;
+    try { pending = JSON.parse(pendingRaw); } catch (e) { pending = null; }
+    if (!pending || pending.txRef !== txRef) {
+        showToast('Payment received, but the listing reference did not match. Please contact support with reference: ' + (txRef || transactionId), 'error', 10000);
+        return;
+    }
+
+    try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error('Your session expired — please sign in again, then contact support with reference: ' + txRef);
+
+        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/verify-and-post-listing`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'apikey': window.SUPABASE_ANON_KEY
             },
-            callback: function (payment) {
-                settled = true;
-                resolve({ transactionId: payment.transaction_id, txRef: payment.tx_ref });
-            },
-            onclose: function (incomplete) {
-                if (!settled && incomplete) reject(new Error('Payment was not completed.'));
-            }
+            body: JSON.stringify({
+                transaction_id: transactionId,
+                tx_ref: txRef,
+                listing: pending.listing
+            })
         });
-    });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok || result.error) {
+            throw new Error(result.error || 'Payment was received but the listing could not be created. Please contact support with your payment reference: ' + txRef);
+        }
+        showToast('Payment confirmed — listing published!', 'success');
+        await loadListings();
+    } catch (err) {
+        showToast(err.message, 'error', 10000);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1727,7 +1769,7 @@ function bindListingEvents() {
         submitBtn.textContent = 'Publishing…';
 
         try {
-            await postListing({
+            const result = await postListing({
                 productName:     document.getElementById('productName').value.trim(),
                 listingType:     document.getElementById('listingType').value,
                 productCategory: document.getElementById('productCategory').value,
@@ -1736,6 +1778,14 @@ function bindListingEvents() {
                 seller:          document.getElementById('seller').value.trim(),
                 whatsapp
             }, imageInput?.files?.[0] || null);
+
+            if (result?.redirecting) {
+                // Payment redirect in progress — the browser is about to
+                // navigate to Flutterwave. Don't reset the form or show a
+                // success toast; that happens after the user comes back and
+                // the payment is verified (see handlePendingPaymentReturn()).
+                return;
+            }
 
             document.getElementById('postForm').reset();
             if (uploadFormSection) uploadFormSection.style.display = 'none';
@@ -2178,6 +2228,13 @@ async function init() {
         updateAuthUI();
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
             await loadListings();
+        }
+        if (event === 'INITIAL_SESSION' && currentUser) {
+            // Runs once on load — checks whether we're coming back from a
+            // Flutterwave Standard Checkout redirect and, if so, verifies
+            // the payment and posts the listing that was waiting for it.
+            // No-op if there's nothing pending.
+            handlePendingPaymentReturn();
         }
         if (event === 'PASSWORD_RECOVERY') {
             // Supabase fires this after the user clicks the reset-password
