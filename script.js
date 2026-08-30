@@ -933,9 +933,16 @@ async function handlePendingPaymentReturn() {
     sessionStorage.removeItem('emart_pending_payment');
     console.log('[payment-debug] sessionStorage had pending listing:', !!pendingRaw, pendingRaw);
 
-    if (status !== 'successful') {
-        console.log('[payment-debug] status was not "successful", it was:', status);
-        showToast(status === 'cancelled' ? 'Payment was cancelled.' : 'Payment was not completed.', 'warning');
+    // Flutterwave's redirect status wording varies ("successful", "completed",
+    // etc. have both been observed in the wild) and their own docs say to
+    // always verify server-side rather than trust this value — so the only
+    // thing we treat as a definite non-payment here is an explicit
+    // cancellation. Everything else goes to verify-and-post-listing, which
+    // checks the real transaction status with Flutterwave directly using the
+    // secret key — that's the actual authority, not this URL text.
+    if (status === 'cancelled') {
+        console.log('[payment-debug] status was "cancelled" — stopping here, not verifying.');
+        showToast('Payment was cancelled.', 'warning');
         return;
     }
     if (!pendingRaw) {
