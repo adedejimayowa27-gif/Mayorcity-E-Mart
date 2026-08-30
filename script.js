@@ -870,6 +870,7 @@ async function postListing(formData, imageFile) {
         seller_whatsapp: formData.whatsapp
     };
     sessionStorage.setItem('emart_pending_payment', JSON.stringify({ txRef, listing: pendingListing }));
+    console.log('[payment-debug] saved pending listing before redirect:', { txRef, pendingListing });
 
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
@@ -902,6 +903,7 @@ async function postListing(formData, imageFile) {
     // Full-page redirect to Flutterwave's hosted payment page. Tell the
     // caller we're redirecting (not actually done posting yet) so the
     // submit handler doesn't show a premature "published!" toast.
+    console.log('[payment-debug] redirecting to Flutterwave:', paymentLink);
     window.location.href = paymentLink;
     return { redirecting: true };
 }
@@ -916,7 +918,11 @@ async function handlePendingPaymentReturn() {
     const status = params.get('status');
     const transactionId = params.get('transaction_id');
     const txRef = params.get('tx_ref');
-    if (!status || !transactionId) return; // not a payment return — nothing to do
+    console.log('[payment-debug] URL params on load:', { status, transactionId, txRef, fullUrl: window.location.href });
+    if (!status || !transactionId) {
+        console.log('[payment-debug] No status/transaction_id in URL — not a payment return, stopping here.');
+        return; // not a payment return — nothing to do
+    }
 
     // Strip the payment params from the URL right away so a refresh doesn't
     // re-trigger this.
@@ -925,19 +931,24 @@ async function handlePendingPaymentReturn() {
 
     const pendingRaw = sessionStorage.getItem('emart_pending_payment');
     sessionStorage.removeItem('emart_pending_payment');
+    console.log('[payment-debug] sessionStorage had pending listing:', !!pendingRaw, pendingRaw);
 
     if (status !== 'successful') {
+        console.log('[payment-debug] status was not "successful", it was:', status);
         showToast(status === 'cancelled' ? 'Payment was cancelled.' : 'Payment was not completed.', 'warning');
         return;
     }
     if (!pendingRaw) {
+        console.log('[payment-debug] STOPPED: no pending listing found in sessionStorage at all.');
         showToast('Payment received, but your listing details were lost (e.g. a different browser/tab). Please contact support with reference: ' + (txRef || transactionId), 'error', 10000);
         return;
     }
 
     let pending;
     try { pending = JSON.parse(pendingRaw); } catch (e) { pending = null; }
+    console.log('[payment-debug] parsed pending listing:', pending, '— txRef match:', pending?.txRef === txRef);
     if (!pending || pending.txRef !== txRef) {
+        console.log('[payment-debug] STOPPED: txRef mismatch. URL txRef =', txRef, ' stored txRef =', pending?.txRef);
         showToast('Payment received, but the listing reference did not match. Please contact support with reference: ' + (txRef || transactionId), 'error', 10000);
         return;
     }
@@ -945,8 +956,10 @@ async function handlePendingPaymentReturn() {
     try {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
+        console.log('[payment-debug] have session token:', !!token);
         if (!token) throw new Error('Your session expired — please sign in again, then contact support with reference: ' + txRef);
 
+        console.log('[payment-debug] calling verify-and-post-listing with:', { transaction_id: transactionId, tx_ref: txRef, listing: pending.listing });
         const res = await fetch(`${window.SUPABASE_URL}/functions/v1/verify-and-post-listing`, {
             method: 'POST',
             headers: {
@@ -961,6 +974,7 @@ async function handlePendingPaymentReturn() {
             })
         });
         const result = await res.json().catch(() => ({}));
+        console.log('[payment-debug] verify-and-post-listing responded:', res.status, result);
         if (!res.ok || result.error) {
             throw new Error(result.error || 'Payment was received but the listing could not be created. Please contact support with your payment reference: ' + txRef);
         }
