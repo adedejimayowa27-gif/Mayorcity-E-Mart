@@ -25,13 +25,23 @@ const LISTINGS_PER_PAGE = 12;
 // A listing is auto-hidden from the public grid once it's been Active for
 // this many days. Owners can renew it from their Dashboard to reset the clock.
 const LISTING_EXPIRY_DAYS = 30;
+
+// The expiry rule itself doesn't start being enforced until this date — so
+// listings that are already old (posted well before this feature existed)
+// don't all suddenly vanish the moment it ships. Before this date, nothing
+// expires no matter how old it is; from this date on, the normal 30-days-
+// since-posting rule applies as usual.
+const EXPIRY_RULE_START = new Date('2026-10-25T00:00:00Z').getTime();
+
 function isExpired(listing) {
     if (listing.status !== 'Active') return false;
+    if (Date.now() < EXPIRY_RULE_START) return false; // rule not active yet
     const created = new Date(listing.created_at).getTime();
     if (Number.isNaN(created)) return false;
     return (Date.now() - created) > LISTING_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 }
 function daysUntilExpiry(listing) {
+    if (Date.now() < EXPIRY_RULE_START) return null; // rule not active yet — no countdown to show
     const created = new Date(listing.created_at).getTime();
     if (Number.isNaN(created)) return null;
     const daysLeft = LISTING_EXPIRY_DAYS - Math.floor((Date.now() - created) / (24 * 60 * 60 * 1000));
