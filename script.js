@@ -2359,3 +2359,34 @@ init();
         }
     });
 })();
+
+// ═══════════════════════════════════════════════════════════════════════
+// ADDED — Resumption countdown marquee. Shows "X days to go" until
+// resumption day, counting down daily. Runs independently of sign-in state
+// so it's visible to everyone, including signed-out visitors.
+// ═══════════════════════════════════════════════════════════════════════
+(function initResumptionCountdown() {
+    const banner = document.getElementById('resumption-countdown-banner');
+    const track  = banner?.querySelector('.countdown-marquee-track');
+    if (!banner || !track) return;
+
+    const RESUMPTION_DATE = new Date('2026-10-26T00:00:00Z').getTime();
+
+    const today = new Date();
+    const todayMidnightUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const daysLeft = Math.ceil((RESUMPTION_DATE - todayMidnightUTC) / (24 * 60 * 60 * 1000));
+
+    if (daysLeft <= 0) {
+        // Resumption day has arrived (or passed) — nothing left to count down to.
+        banner.style.display = 'none';
+        return;
+    }
+
+    const message = daysLeft === 1
+        ? '📢 1 day to go until resumption!'
+        : `📢 ${daysLeft} days to go until resumption!`;
+
+    track.querySelectorAll('.countdown-marquee-text').forEach(span => {
+        span.textContent = message;
+    });
+})();
