@@ -3,7 +3,7 @@
 // repeat visits and works even with a flaky connection. Listing data itself
 // always comes fresh from Supabase — only the static site files are cached.
 
-const CACHE_NAME = 'mayorcity-emart-v13';
+const CACHE_NAME = 'mayorcity-emart-v14';
 
 const APP_SHELL = [
   '/',
