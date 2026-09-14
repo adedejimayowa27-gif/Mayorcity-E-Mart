@@ -144,12 +144,26 @@
   <!-- Hero Welcome Showcase Banner Section -->
   <section class="hero-section">
     <h2>Buy. Sell. Find.</h2>
-    <p>A safe, moderated, and professional campus environment connecting students with trusted buyers and sellers while helping lost property find its rightful owner.</p>
+    <p id="hero-subtext">A safe, moderated, and professional campus environment connecting students with trusted buyers and sellers while helping lost property find its rightful owner.</p>
     <div class="hero-cta-buttons">
       <button id="hero-explore-btn">Explore Marketplace</button>
       <button id="hero-post-btn" class="cta-post-btn">Post a New Item</button>
       <button id="hero-lf-btn" class="secondary-btn">Report Lost &amp; Found</button>
     </div>
+  </section>
+
+  <!-- Activity summary strip — populated by renderActivityFeed() in script.js -->
+  <section id="activity-feed" class="activity-feed-section">
+    <div class="activity-feed-inner" id="activity-feed-inner"></div>
+  </section>
+
+  <!-- New on Mayorcity — populated by renderNewArrivals() in script.js -->
+  <section id="new-arrivals-section" class="listings-container-section" style="display:none;">
+    <div class="section-header-row">
+      <h2>🆕 New on Mayorcity</h2>
+      <button type="button" id="view-all-new-btn" class="view-all-link">View All →</button>
+    </div>
+    <div class="products-grid horizontal-scroll" id="new-arrivals-grid"></div>
   </section>
 
   <!-- Staff/Admin banner (shown for admins & moderators once signed in) -->
