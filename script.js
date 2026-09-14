@@ -538,6 +538,9 @@ async function loadListings() {
     }));
 
     updatePlatformStatistics();
+    renderActivityFeed();
+    renderNewArrivals();
+    updateHeroLine();
     displayListings();
 }
 
@@ -555,6 +558,9 @@ function buildBadges(listing) {
     }
     let html = `<span class="badge ${isLost ? lfClass : 'badge-market'}">${isLost ? lfLabel : 'For Sale'}</span>`;
     html    += ` <span class="badge badge-cat">${listing.category || 'General'}</span>`;
+    if (listing.type === 'Market' && listing.status === 'Active' && isNewListing(listing)) {
+        html += ` <span class="badge badge-new">🆕 New</span>`;
+    }
     if (listing._profile?.verification_status === 'verified') {
         html += ` <span class="badge badge-verified">✓ Verified</span>`;
     }
@@ -766,6 +772,72 @@ function updatePlatformStatistics() {
     if (statTotal)  statTotal.textContent  = active.length;
     if (statMarket) statMarket.textContent = active.filter(l => l.type === 'Market').length;
     if (statLost)   statLost.textContent   = active.filter(l => l.type === 'Lost').length;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// HOMEPAGE ACTIVITY — Batch 1: reuses allListings already in memory.
+// No new Supabase queries, no new tables. Never fabricates numbers —
+// every count here reflects real rows already fetched by loadListings().
+// ═══════════════════════════════════════════════════════════════════════
+const NEW_ARRIVAL_WINDOW_HOURS = 48; // a listing is tagged/counted as "NEW" for this long after posting
+
+function isNewListing(listing) {
+    if (listing.type !== 'Market') return false;
+    const created = new Date(listing.created_at).getTime();
+    if (Number.isNaN(created)) return false;
+    return (Date.now() - created) <= NEW_ARRIVAL_WINDOW_HOURS * 60 * 60 * 1000;
+}
+
+function renderActivityFeed() {
+    const container = document.getElementById('activity-feed-inner');
+    if (!container) return;
+
+    const active = allListings.filter(l => l.status !== 'Hidden' && l.status !== 'Removed' && !isExpired(l));
+    const newCount        = active.filter(l => l.type === 'Market' && isNewListing(l)).length;
+    const lostFoundActive = active.filter(l => l.type === 'Lost').length;
+
+    if (newCount === 0 && lostFoundActive === 0) {
+        container.innerHTML = `<p class="activity-feed-empty">Be the first to post something today.</p>`;
+        return;
+    }
+
+    const chips = [];
+    if (newCount > 0) {
+        chips.push(`<span class="activity-chip">🆕 ${newCount} new listing${newCount === 1 ? '' : 's'} in the last 2 days</span>`);
+    }
+    if (lostFoundActive > 0) {
+        chips.push(`<span class="activity-chip">📍 ${lostFoundActive} active Lost &amp; Found post${lostFoundActive === 1 ? '' : 's'}</span>`);
+    }
+    container.innerHTML = chips.join('');
+}
+
+function renderNewArrivals() {
+    const grid    = document.getElementById('new-arrivals-grid');
+    const section = document.getElementById('new-arrivals-section');
+    if (!grid || !section) return;
+
+    // allListings is fetched newest-first (see loadListings' .order('created_at', {ascending:false})),
+    // so no re-sort is needed here.
+    const candidates = allListings
+        .filter(l => l.type === 'Market' && l.status === 'Active' && !isExpired(l))
+        .slice(0, 10);
+
+    if (candidates.length === 0) {
+        section.style.display = 'none'; // clean empty state — hide rather than show a broken/empty rail
+        return;
+    }
+    section.style.display = '';
+    grid.innerHTML = candidates.map((listing, i) => buildListingCard(listing, i)).join('');
+}
+
+function updateHeroLine() {
+    const el = document.getElementById('hero-subtext');
+    if (!el) return;
+    const newCount = allListings.filter(l => l.type === 'Market' && isNewListing(l) && l.status === 'Active').length;
+    if (newCount > 0) {
+        el.textContent = `${newCount} new listing${newCount === 1 ? '' : 's'} just posted — see what's fresh on campus.`;
+    }
+    // else: leave the original hardcoded hero copy untouched when there's nothing new to report
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1036,6 +1108,9 @@ async function deleteListing(id) {
     allListings = allListings.filter(l => l.id !== id);
     displayListings();
     updatePlatformStatistics();
+    renderActivityFeed();
+    renderNewArrivals();
+    updateHeroLine();
     showToast('Listing removed.', 'success');
 }
 
@@ -1764,6 +1839,22 @@ function bindListingEvents() {
     });
     document.getElementById('hero-post-btn')?.addEventListener('click', showPostForm);
     document.getElementById('hero-lf-btn')?.addEventListener('click', openLfModal);
+
+    // "View All" on the New Arrivals rail — filters/scrolls the existing main
+    // grid rather than a real /new-arrivals URL, since this app has no router.
+    document.getElementById('view-all-new-btn')?.addEventListener('click', () => {
+        currentTab = 'Market';
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.toggle('active-tab', b.dataset.type === 'Market');
+        });
+        document.querySelectorAll('#category-list li').forEach(l => l.classList.remove('active-cat'));
+        document.querySelector('#category-list li')?.classList.add('active-cat');
+        currentCategory = 'Show All';
+        if (sortSelect) sortSelect.value = 'newest';
+        currentPage = 1;
+        displayListings();
+        document.getElementById('featured-listings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     // Nav Lost & Found button
     document.getElementById('nav-lf-btn')?.addEventListener('click', () => {
