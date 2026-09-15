@@ -31,6 +31,16 @@ const LISTING_EXPIRY_DAYS = 30;
 // Wanted is a brand-new type with no pre-existing posts to grandfather in.
 const WANTED_EXPIRY_DAYS = 14;
 
+// A price drop stays badged/listed for this long after it happens — after
+// that it's still a valid lower price, just no longer "news".
+const PRICE_DROP_DISPLAY_DAYS = 7;
+function hasPriceDrop(listing) {
+    if (listing.type !== 'Market' || !listing.previous_price || !listing.price_dropped_at) return false;
+    const droppedAt = new Date(listing.price_dropped_at).getTime();
+    if (Number.isNaN(droppedAt)) return false;
+    return (Date.now() - droppedAt) <= PRICE_DROP_DISPLAY_DAYS * 24 * 60 * 60 * 1000;
+}
+
 // The expiry rule itself doesn't start being enforced until this date — so
 // listings that are already old (posted well before this feature existed)
 // don't all suddenly vanish the moment it ships. Before this date, nothing
@@ -564,6 +574,7 @@ async function loadListings() {
     renderNewArrivals();
     renderWantedFeed();
     renderFeaturedListing();
+    renderPriceDrops();
     updateHeroLine();
     displayListings();
 }
@@ -587,6 +598,9 @@ function buildBadges(listing) {
     html    += ` <span class="badge badge-cat">${listing.category || 'General'}</span>`;
     if (listing.is_featured) {
         html += ` <span class="badge badge-featured">⭐ Featured</span>`;
+    }
+    if (hasPriceDrop(listing)) {
+        html += ` <span class="badge badge-price-drop">💥 Price Drop</span>`;
     }
     if (listing.type === 'Market' && listing.status === 'Active' && isNewListing(listing)) {
         html += ` <span class="badge badge-new">🆕 New</span>`;
@@ -680,8 +694,11 @@ function buildListingCard(listing, cardIndex = 0) {
     const isLost   = listing.type === 'Lost';
     const isWanted = listing.type === 'Wanted';
     const budgetVal = Number(listing.price || 0);
+    const priceDropped = hasPriceDrop(listing);
+    const prevPriceNum = priceDropped ? Number(listing.previous_price || 0) : 0;
     const displayPrice = isLost ? 'Contact for details'
         : isWanted ? (budgetVal > 0 ? `Budget: ₦${budgetVal.toLocaleString()}` : 'Budget: Flexible')
+        : priceDropped ? `<span class="price-old">₦${prevPriceNum.toLocaleString()}</span> <span class="price-new">₦${budgetVal.toLocaleString()}</span>`
         : `₦${budgetVal.toLocaleString()}`;
     const img          = listing.image_url || 'https://placehold.co/400x200?text=No+Image';
     const showEdit     = canEditListing(listing);
@@ -699,7 +716,7 @@ function buildListingCard(listing, cardIndex = 0) {
     const wantedWaLink = `https://wa.me/${waNumber}?text=${wantedMsgText}`;
 
     const marketMsgText = (!isLost && !isWanted)
-        ? encodeURIComponent(`Hello, I'm interested in your "${listing.product_name}" listing on Mayorcity E-Mart (${displayPrice}). Is it still available?`)
+        ? encodeURIComponent(`Hello, I'm interested in your "${listing.product_name}" listing on Mayorcity E-Mart (₦${budgetVal.toLocaleString()}). Is it still available?`)
         : '';
     const marketWaLink = `https://wa.me/${waNumber}?text=${marketMsgText}`;
     const locationText = listing.location ? `📍 ${listing.location}` : '';
@@ -850,6 +867,24 @@ function renderFeaturedListing() {
     slot.innerHTML = buildListingCard(featured, 0);
 }
 
+function renderPriceDrops() {
+    const grid    = document.getElementById('price-drops-grid');
+    const section = document.getElementById('price-drops-section');
+    if (!grid || !section) return;
+
+    const candidates = allListings
+        .filter(l => l.type === 'Market' && l.status === 'Active' && !isExpired(l) && hasPriceDrop(l))
+        .sort((a, b) => new Date(b.price_dropped_at) - new Date(a.price_dropped_at))
+        .slice(0, 10);
+
+    if (candidates.length === 0) {
+        section.style.display = 'none'; // no real drops right now — hide, don't fabricate one
+        return;
+    }
+    section.style.display = '';
+    grid.innerHTML = candidates.map((listing, i) => buildListingCard(listing, i)).join('');
+}
+
 function renderActivityFeed() {
     const container = document.getElementById('activity-feed-inner');
     if (!container) return;
@@ -858,8 +893,9 @@ function renderActivityFeed() {
     const newCount        = active.filter(l => l.type === 'Market' && isNewListing(l)).length;
     const lostFoundActive = active.filter(l => l.type === 'Lost').length;
     const wantedActive    = active.filter(l => l.type === 'Wanted' && l.status === 'Active').length;
+    const priceDropCount  = active.filter(l => hasPriceDrop(l)).length;
 
-    if (newCount === 0 && lostFoundActive === 0 && wantedActive === 0) {
+    if (newCount === 0 && lostFoundActive === 0 && wantedActive === 0 && priceDropCount === 0) {
         container.innerHTML = `<p class="activity-feed-empty">Be the first to post something today.</p>`;
         return;
     }
@@ -867,6 +903,9 @@ function renderActivityFeed() {
     const chips = [];
     if (newCount > 0) {
         chips.push(`<span class="activity-chip">🆕 ${newCount} new listing${newCount === 1 ? '' : 's'} in the last 2 days</span>`);
+    }
+    if (priceDropCount > 0) {
+        chips.push(`<span class="activity-chip">💥 ${priceDropCount} price drop${priceDropCount === 1 ? '' : 's'} this week</span>`);
     }
     if (wantedActive > 0) {
         chips.push(`<span class="activity-chip">🔎 ${wantedActive} student${wantedActive === 1 ? '' : 's'} looking for something</span>`);
@@ -1220,6 +1259,7 @@ async function deleteListing(id) {
     renderNewArrivals();
     renderWantedFeed();
     renderFeaturedListing();
+    renderPriceDrops();
     updateHeroLine();
     showToast('Listing removed.', 'success');
 }
@@ -1243,8 +1283,11 @@ async function openViewModal(id) {
         : encodeURIComponent(`Hello ${listing.seller_name}, I'm interested in your item "${listing.product_name}" on Mayorcity E-Mart!`);
     const waLink         = `https://wa.me/${waNumber}?text=${msgText}`;
     const img            = listing.image_url || 'https://placehold.co/640x360?text=No+Image';
+    const priceDropped   = hasPriceDrop(listing);
+    const prevPriceNum   = priceDropped ? Number(listing.previous_price || 0) : 0;
     const formattedPrice = isLost ? 'N/A — Lost & Found'
         : isWanted ? (budgetVal > 0 ? `₦${budgetVal.toLocaleString()}` : 'Flexible')
+        : priceDropped ? `<span class="price-old">₦${prevPriceNum.toLocaleString()}</span> <span class="price-new">₦${budgetVal.toLocaleString()}</span>`
         : `₦${budgetVal.toLocaleString()}`;
     const profile       = listing._profile;
     const avgRating     = profile?.rating_count ? (profile.rating_sum / profile.rating_count).toFixed(1) : null;
@@ -2371,7 +2414,7 @@ function renderDashboardList() {
             <img src="${l.image_url || ''}" alt="" class="dash-listing-thumb" onerror="this.style.display='none'">
             <div class="dash-listing-info">
                 <p class="dash-listing-name">${escapeHtml(l.product_name)}</p>
-                <p class="dash-listing-meta">${l.type === 'Market' ? '₦' + Number(l.price || 0).toLocaleString() : l.type === 'Wanted' ? (Number(l.price||0) > 0 ? 'Budget: ₦' + Number(l.price).toLocaleString() : 'Budget: Flexible') : l.type} • ${formatDate(l.created_at)}${expiryNote}</p>
+                <p class="dash-listing-meta">${l.type === 'Market' ? '₦' + Number(l.price || 0).toLocaleString() + (hasPriceDrop(l) ? ` (was ₦${Number(l.previous_price||0).toLocaleString()})` : '') : l.type === 'Wanted' ? (Number(l.price||0) > 0 ? 'Budget: ₦' + Number(l.price).toLocaleString() : 'Budget: Flexible') : l.type} • ${formatDate(l.created_at)}${expiryNote}</p>
             </div>
             <div class="dash-listing-actions">
                 ${expired ? `<button type="button" class="dash-renew-btn" data-id="${l.id}">Renew Listing</button>` : ''}
