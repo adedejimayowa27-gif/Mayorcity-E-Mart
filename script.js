@@ -596,15 +596,23 @@ function buildBadges(listing) {
     const typeClass = isWanted ? 'badge-wanted' : (isLost ? lfClass : 'badge-market');
     let html = `<span class="badge ${typeClass}">${typeLabel}</span>`;
     html    += ` <span class="badge badge-cat">${listing.category || 'General'}</span>`;
+
+    // "Activity flair" badges (Featured / Price Drop / New) are capped to
+    // ONE at a time, picked by priority below — not stacked. A listing can
+    // technically qualify for more than one (e.g. featured AND recently
+    // posted), but showing all of them at once is exactly the "five
+    // competing labels" clutter the brief calls out. Trust/moderation
+    // badges (Verified, Under Review, Sold/Found, Hidden) are a different
+    // category — those are safety signals, not activity flair, so they're
+    // never suppressed for tidiness.
     if (listing.is_featured) {
         html += ` <span class="badge badge-featured">⭐ Featured</span>`;
-    }
-    if (hasPriceDrop(listing)) {
+    } else if (hasPriceDrop(listing)) {
         html += ` <span class="badge badge-price-drop">💥 Price Drop</span>`;
-    }
-    if (listing.type === 'Market' && listing.status === 'Active' && isNewListing(listing)) {
+    } else if (listing.type === 'Market' && listing.status === 'Active' && isNewListing(listing)) {
         html += ` <span class="badge badge-new">🆕 New</span>`;
     }
+
     if (listing._profile?.verification_status === 'verified') {
         html += ` <span class="badge badge-verified">✓ Verified</span>`;
     }
@@ -742,7 +750,7 @@ function buildListingCard(listing, cardIndex = 0) {
         </div>
         <div class="card-actions">
             <button type="button" class="view-btn" data-id="${listing.id}">View Details</button>
-            <a href="${waLinkForCard}" target="_blank" rel="noopener noreferrer" class="card-wa-btn">${isWanted ? waLabelForCard : `💬 WhatsApp ${waLabelForCard}`}</a>
+            <a href="${waLinkForCard}" target="_blank" rel="noopener noreferrer" class="card-wa-btn" data-id="${listing.id}">${isWanted ? waLabelForCard : `💬 WhatsApp ${waLabelForCard}`}</a>
             <div class="card-secondary-actions">
                 ${showEdit   ? `<button type="button" class="edit-btn"   data-id="${listing.id}">Edit</button>`   : ''}
                 ${showDelete ? `<button type="button" class="delete-btn" data-id="${listing.id}">Delete</button>` : ''}
@@ -1267,9 +1275,28 @@ async function deleteListing(id) {
 // ═══════════════════════════════════════════════════════════════════════
 // MODAL — VIEW DETAILS
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// EVENT TRACKING — foundation for a future Trending section (Batch 5).
+// Fire-and-forget by design: analytics must never block or break the
+// actual user-facing action (opening a listing, messaging a seller), so
+// failures here are swallowed silently rather than surfaced as errors.
+// ═══════════════════════════════════════════════════════════════════════
+function logProductEvent(listingId, eventType) {
+    if (!listingId) return;
+    supabase.from('product_events').insert({
+        listing_id: listingId,
+        event_type: eventType,
+        user_id:    currentUser?.id || null
+    }).then(({ error }) => {
+        if (error) console.warn('[analytics] event log failed (non-fatal):', error.message);
+    });
+}
+
 async function openViewModal(id) {
     const listing = allListings.find(l => l.id === id);
     if (!listing || !viewModalContent) return;
+
+    logProductEvent(id, 'view');
 
     const isLost         = listing.type === 'Lost';
     const isWanted       = listing.type === 'Wanted';
@@ -1394,6 +1421,7 @@ async function openViewModal(id) {
 
     // Bind actions
     document.getElementById('modal-wa-btn')?.addEventListener('click', () => {
+        logProductEvent(listing.id, 'whatsapp_click');
         window.open(waLink, '_blank', 'noopener,noreferrer');
     });
 
@@ -2116,14 +2144,22 @@ function bindListingEvents() {
         }
     });
 
-    // Grid click delegation
-    productsGrid?.addEventListener('click', async e => {
+    // Grid click delegation — deliberately bound to `document`, not just the
+    // main #products grid. The New Arrivals / Wanted / Price Drops / Featured
+    // homepage rails render the exact same card markup but are separate
+    // containers; a listener scoped to #products alone would silently do
+    // nothing when View/Edit/Delete was clicked on a homepage rail card.
+    // (Caught while wiring up Batch 5's click tracking below — pre-existing
+    // since Batch 1, worth knowing about.)
+    document.addEventListener('click', async e => {
         const viewBtn   = e.target.closest('.view-btn');
         const editBtn   = e.target.closest('.edit-btn');
         const deleteBtn = e.target.closest('.delete-btn');
+        const waBtn     = e.target.closest('.card-wa-btn');
         if (viewBtn)   { await openViewModal(viewBtn.dataset.id);   return; }
         if (editBtn)   { await openEditModal(editBtn.dataset.id);   return; }
         if (deleteBtn) { await deleteListing(deleteBtn.dataset.id); return; }
+        if (waBtn)     { logProductEvent(waBtn.dataset.id, 'whatsapp_click'); return; } // fire-and-forget; the wa.me link opens normally, nothing to prevent
     });
 
     // View modal close
