@@ -25,6 +25,11 @@ const LISTINGS_PER_PAGE = 12;
 // A listing is auto-hidden from the public grid once it's been Active for
 // this many days. Owners can renew it from their Dashboard to reset the clock.
 const LISTING_EXPIRY_DAYS = 30;
+// Wanted requests go stale much faster than a for-sale item — someone
+// looking for a phone three months ago shouldn't still show as "active".
+// This window applies immediately (no EXPIRY_RULE_START gate below), since
+// Wanted is a brand-new type with no pre-existing posts to grandfather in.
+const WANTED_EXPIRY_DAYS = 14;
 
 // The expiry rule itself doesn't start being enforced until this date — so
 // listings that are already old (posted well before this feature existed)
@@ -35,12 +40,22 @@ const EXPIRY_RULE_START = new Date('2026-10-25T00:00:00Z').getTime();
 
 function isExpired(listing) {
     if (listing.status !== 'Active') return false;
+    if (listing.type === 'Wanted') {
+        const created = new Date(listing.created_at).getTime();
+        if (Number.isNaN(created)) return false;
+        return (Date.now() - created) > WANTED_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+    }
     if (Date.now() < EXPIRY_RULE_START) return false; // rule not active yet
     const created = new Date(listing.created_at).getTime();
     if (Number.isNaN(created)) return false;
     return (Date.now() - created) > LISTING_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 }
 function daysUntilExpiry(listing) {
+    if (listing.type === 'Wanted') {
+        const created = new Date(listing.created_at).getTime();
+        if (Number.isNaN(created)) return null;
+        return WANTED_EXPIRY_DAYS - Math.floor((Date.now() - created) / (24 * 60 * 60 * 1000));
+    }
     if (Date.now() < EXPIRY_RULE_START) return null; // rule not active yet — no countdown to show
     const created = new Date(listing.created_at).getTime();
     if (Number.isNaN(created)) return null;
@@ -540,6 +555,7 @@ async function loadListings() {
     updatePlatformStatistics();
     renderActivityFeed();
     renderNewArrivals();
+    renderWantedFeed();
     updateHeroLine();
     displayListings();
 }
@@ -548,7 +564,8 @@ async function loadListings() {
 // LISTINGS — DISPLAY
 // ═══════════════════════════════════════════════════════════════════════
 function buildBadges(listing) {
-    const isLost = listing.type === 'Lost';
+    const isLost   = listing.type === 'Lost';
+    const isWanted = listing.type === 'Wanted';
     let lfLabel = 'Lost & Found';
     let lfClass = 'badge-lost';
     if (isLost) {
@@ -556,7 +573,9 @@ function buildBadges(listing) {
         else if (listing.lost_or_found === 'Lost') { lfLabel = '🔴 LOST ITEM'; lfClass = 'badge-lost-item'; }
         else { lfLabel = 'Lost & Found'; lfClass = 'badge-lost'; }
     }
-    let html = `<span class="badge ${isLost ? lfClass : 'badge-market'}">${isLost ? lfLabel : 'For Sale'}</span>`;
+    const typeLabel = isWanted ? '🔎 Wanted' : (isLost ? lfLabel : 'For Sale');
+    const typeClass = isWanted ? 'badge-wanted' : (isLost ? lfClass : 'badge-market');
+    let html = `<span class="badge ${typeClass}">${typeLabel}</span>`;
     html    += ` <span class="badge badge-cat">${listing.category || 'General'}</span>`;
     if (listing.type === 'Market' && listing.status === 'Active' && isNewListing(listing)) {
         html += ` <span class="badge badge-new">🆕 New</span>`;
@@ -568,7 +587,7 @@ function buildBadges(listing) {
         html += ` <span class="badge badge-review">⚠ Under Review</span>`;
     }
     if (listing.status === 'Sold') {
-        html += ` <span class="badge badge-sold">Sold</span>`;
+        html += isWanted ? ` <span class="badge badge-sold">✅ Found</span>` : ` <span class="badge badge-sold">Sold</span>`;
     }
     if (listing.status === 'Hidden') {
         html += ` <span class="badge badge-hidden">Hidden</span>`;
@@ -588,7 +607,7 @@ function displayListings() {
         const seller = (l.seller_name  || '').toLowerCase();
         const eId    = (l.emart_id     || '').toLowerCase();
         const price  = Number(l.price || 0);
-        const priceOk = l.type === 'Lost' ? true
+        const priceOk = (l.type === 'Lost' || l.type === 'Wanted') ? true
             : (Number.isNaN(priceMin) || price >= priceMin)
               && (Number.isNaN(priceMax) || price <= priceMax);
         return (currentTab === 'all' || l.type === currentTab)
@@ -647,8 +666,12 @@ function resetAllFilters() {
 // "you might like" suggestions in the empty state can reuse the exact same
 // markup instead of duplicating it.
 function buildListingCard(listing, cardIndex = 0) {
-    const isLost       = listing.type === 'Lost';
-    const displayPrice = isLost ? 'Contact for details' : `₦${Number(listing.price || 0).toLocaleString()}`;
+    const isLost   = listing.type === 'Lost';
+    const isWanted = listing.type === 'Wanted';
+    const budgetVal = Number(listing.price || 0);
+    const displayPrice = isLost ? 'Contact for details'
+        : isWanted ? (budgetVal > 0 ? `Budget: ₦${budgetVal.toLocaleString()}` : 'Budget: Flexible')
+        : `₦${budgetVal.toLocaleString()}`;
     const img          = listing.image_url || 'https://placehold.co/400x200?text=No+Image';
     const showEdit     = canEditListing(listing);
     const showDelete   = canDeleteListing(listing);
@@ -659,30 +682,39 @@ function buildListingCard(listing, cardIndex = 0) {
         : '';
     const lfWaLink = `https://wa.me/${waNumber}?text=${lfMsgText}`;
 
-    const marketMsgText = !isLost
+    const wantedMsgText = isWanted
+        ? encodeURIComponent(`Hi, I saw you're looking for "${listing.product_name}" on Mayorcity E-Mart. I have one — still interested?`)
+        : '';
+    const wantedWaLink = `https://wa.me/${waNumber}?text=${wantedMsgText}`;
+
+    const marketMsgText = (!isLost && !isWanted)
         ? encodeURIComponent(`Hello, I'm interested in your "${listing.product_name}" listing on Mayorcity E-Mart (${displayPrice}). Is it still available?`)
         : '';
     const marketWaLink = `https://wa.me/${waNumber}?text=${marketMsgText}`;
     const locationText = listing.location ? `📍 ${listing.location}` : '';
     const dateText = listing.date_lost_found ? `📅 ${formatDate(listing.date_lost_found)}` : '';
 
+    const waLinkForCard = isLost ? lfWaLink : (isWanted ? wantedWaLink : marketWaLink);
+    const waLabelForCard = isLost ? '' : (isWanted ? '🙋 I Have This' : 'Seller');
+
     return `
-    <div class="product-card${listing.status === 'Hidden' ? ' card-hidden' : ''}${isLost ? ' card-lf' : ''}" style="animation-delay:${Math.min(cardIndex * 40, 400)}ms">
+    <div class="product-card${listing.status === 'Hidden' ? ' card-hidden' : ''}${isLost ? ' card-lf' : ''}${isWanted ? ' card-wanted' : ''}" style="animation-delay:${Math.min(cardIndex * 40, 400)}ms">
         <div class="card-badges">${buildBadges(listing)}</div>
         <div class="card-image-wrap">
             <img src="${img}" alt="${listing.product_name || 'Product'}" loading="lazy">
         </div>
         <div class="card-body">
             <h3 class="card-title">${listing.product_name || 'Untitled'}</h3>
-            <p class="card-seller">👤 ${listing.seller_name || 'Anonymous'}${listing._profile?.verification_status === 'verified' ? ' <span class="inline-verified">✓</span>' : ''}</p>
+            <p class="card-seller">👤 ${isWanted ? 'Requested by ' : ''}${listing.seller_name || 'Anonymous'}${listing._profile?.verification_status === 'verified' ? ' <span class="inline-verified">✓</span>' : ''}</p>
             ${isLost && locationText ? `<p class="card-location">${locationText}</p>` : ''}
+            ${isWanted && locationText ? `<p class="card-location">${locationText}</p>` : ''}
             ${isLost && dateText     ? `<p class="card-lf-date">${dateText}</p>`      : ''}
-            ${!isLost ? `<p class="card-price">${displayPrice}</p>` : ''}
+            ${(!isLost) ? `<p class="card-price">${displayPrice}</p>` : ''}
             <p class="card-desc">${listing.description ? listing.description.substring(0, 80) + '…' : 'No details.'}</p>
         </div>
         <div class="card-actions">
             <button type="button" class="view-btn" data-id="${listing.id}">View Details</button>
-            <a href="${isLost ? lfWaLink : marketWaLink}" target="_blank" rel="noopener noreferrer" class="card-wa-btn">💬 WhatsApp ${isLost ? '' : 'Seller'}</a>
+            <a href="${waLinkForCard}" target="_blank" rel="noopener noreferrer" class="card-wa-btn">${isWanted ? waLabelForCard : `💬 WhatsApp ${waLabelForCard}`}</a>
             <div class="card-secondary-actions">
                 ${showEdit   ? `<button type="button" class="edit-btn"   data-id="${listing.id}">Edit</button>`   : ''}
                 ${showDelete ? `<button type="button" class="delete-btn" data-id="${listing.id}">Delete</button>` : ''}
@@ -696,7 +728,7 @@ function buildListingCard(listing, cardIndex = 0) {
 // (loosening price/search/tab), then falls back to the newest active listings
 // site-wide so the empty state never dead-ends the user.
 function getSuggestedListings(limit = 4) {
-    const pool = allListings.filter(l => !isExpired(l) && l.status !== 'Hidden' && l.type !== 'Lost');
+    const pool = allListings.filter(l => !isExpired(l) && l.status !== 'Hidden' && l.type !== 'Lost' && l.type !== 'Wanted');
 
     let suggestions = [];
     if (currentCategory !== 'Show All') {
@@ -795,8 +827,9 @@ function renderActivityFeed() {
     const active = allListings.filter(l => l.status !== 'Hidden' && l.status !== 'Removed' && !isExpired(l));
     const newCount        = active.filter(l => l.type === 'Market' && isNewListing(l)).length;
     const lostFoundActive = active.filter(l => l.type === 'Lost').length;
+    const wantedActive    = active.filter(l => l.type === 'Wanted' && l.status === 'Active').length;
 
-    if (newCount === 0 && lostFoundActive === 0) {
+    if (newCount === 0 && lostFoundActive === 0 && wantedActive === 0) {
         container.innerHTML = `<p class="activity-feed-empty">Be the first to post something today.</p>`;
         return;
     }
@@ -804,6 +837,9 @@ function renderActivityFeed() {
     const chips = [];
     if (newCount > 0) {
         chips.push(`<span class="activity-chip">🆕 ${newCount} new listing${newCount === 1 ? '' : 's'} in the last 2 days</span>`);
+    }
+    if (wantedActive > 0) {
+        chips.push(`<span class="activity-chip">🔎 ${wantedActive} student${wantedActive === 1 ? '' : 's'} looking for something</span>`);
     }
     if (lostFoundActive > 0) {
         chips.push(`<span class="activity-chip">📍 ${lostFoundActive} active Lost &amp; Found post${lostFoundActive === 1 ? '' : 's'}</span>`);
@@ -830,6 +866,23 @@ function renderNewArrivals() {
     grid.innerHTML = candidates.map((listing, i) => buildListingCard(listing, i)).join('');
 }
 
+function renderWantedFeed() {
+    const grid    = document.getElementById('wanted-grid');
+    const section = document.getElementById('wanted-section');
+    if (!grid || !section) return;
+
+    const candidates = allListings
+        .filter(l => l.type === 'Wanted' && l.status === 'Active' && !isExpired(l))
+        .slice(0, 10); // newest-first, same ordering guarantee as renderNewArrivals
+
+    if (candidates.length === 0) {
+        section.style.display = 'none'; // no fabricated "0 students looking" messaging — just hide
+        return;
+    }
+    section.style.display = '';
+    grid.innerHTML = candidates.map((listing, i) => buildListingCard(listing, i)).join('');
+}
+
 function updateHeroLine() {
     const el = document.getElementById('hero-subtext');
     if (!el) return;
@@ -847,7 +900,8 @@ async function postListing(formData, imageFile) {
     if (!currentUser) throw new Error('You must be signed in to post a listing.');
     if (!canPost())   throw new Error('Your account must be verified before posting. Please wait for admin approval.');
 
-    const isLost = formData.listingType === 'Lost';
+    const isLost   = formData.listingType === 'Lost';
+    const isWanted = formData.listingType === 'Wanted';
 
     // Upload image first either way — no point charging someone, then losing
     // their listing to a slow/failed upload afterward.
@@ -862,6 +916,30 @@ async function postListing(formData, imageFile) {
             const { data: urlData } = supabase.storage.from('listing-images').getPublicUrl(path);
             imageUrl = urlData?.publicUrl || '';
         }
+    }
+
+    if (isWanted) {
+        // Wanted requests are free — same trust bar as Market (verified users
+        // only, enforced by canPost() above and by RLS), but no posting fee,
+        // since there's no item changing hands here to charge against.
+        // Rate limiting (max active Wanted posts per user) is enforced by a
+        // DB trigger — see migration-batch2-wanted.sql — so a rejection here
+        // surfaces as a normal Supabase error the caller already handles.
+        const { error } = await supabase.from('listings').insert({
+            emart_id:        generateEmartId(),
+            product_name:    formData.productName,
+            type:            'Wanted',
+            category:        formData.productCategory,
+            price:           formData.price || '0', // reused as budget; '0' = "flexible"
+            description:     formData.description,
+            image_url:       imageUrl,
+            location:        formData.wantedLocation || '',
+            seller_name:     formData.seller,        // the requester's name, not a seller
+            seller_whatsapp: formData.whatsapp,       // the requester's contact number
+            user_id:         currentUser.id
+        });
+        if (error) throw new Error(error.message);
+        return;
     }
 
     if (isLost) {
@@ -1110,6 +1188,7 @@ async function deleteListing(id) {
     updatePlatformStatistics();
     renderActivityFeed();
     renderNewArrivals();
+    renderWantedFeed();
     updateHeroLine();
     showToast('Listing removed.', 'success');
 }
@@ -1121,15 +1200,21 @@ async function openViewModal(id) {
     const listing = allListings.find(l => l.id === id);
     if (!listing || !viewModalContent) return;
 
-    const isLost        = listing.type === 'Lost';
-    const waNumber      = formatWhatsAppNumber(listing.seller_whatsapp);
-    const lfOrFound     = listing.lost_or_found || 'Lost';
-    const msgText       = isLost
+    const isLost         = listing.type === 'Lost';
+    const isWanted       = listing.type === 'Wanted';
+    const waNumber       = formatWhatsAppNumber(listing.seller_whatsapp);
+    const lfOrFound      = listing.lost_or_found || 'Lost';
+    const budgetVal      = Number(listing.price || 0);
+    const msgText        = isLost
         ? encodeURIComponent(`Hello ${listing.seller_name}, I saw your ${lfOrFound === 'Found' ? 'FOUND' : 'LOST'} item report for "${listing.product_name}" on Mayorcity E-Mart. I'd like to help!`)
+        : isWanted
+        ? encodeURIComponent(`Hi ${listing.seller_name}, I saw you're looking for "${listing.product_name}" on Mayorcity E-Mart. I have one — still interested?`)
         : encodeURIComponent(`Hello ${listing.seller_name}, I'm interested in your item "${listing.product_name}" on Mayorcity E-Mart!`);
-    const waLink        = `https://wa.me/${waNumber}?text=${msgText}`;
-    const img           = listing.image_url || 'https://placehold.co/640x360?text=No+Image';
-    const formattedPrice = isLost ? 'N/A — Lost & Found' : `₦${Number(listing.price || 0).toLocaleString()}`;
+    const waLink         = `https://wa.me/${waNumber}?text=${msgText}`;
+    const img            = listing.image_url || 'https://placehold.co/640x360?text=No+Image';
+    const formattedPrice = isLost ? 'N/A — Lost & Found'
+        : isWanted ? (budgetVal > 0 ? `₦${budgetVal.toLocaleString()}` : 'Flexible')
+        : `₦${budgetVal.toLocaleString()}`;
     const profile       = listing._profile;
     const avgRating     = profile?.rating_count ? (profile.rating_sum / profile.rating_count).toFixed(1) : null;
 
@@ -1161,6 +1246,15 @@ async function openViewModal(id) {
                         <span class="vm-info-label">📅 Date</span>
                         <span class="vm-info-value">${formatDate(listing.date_lost_found)}</span>
                     </div>` : ''}
+                    ` : isWanted ? `
+                    <div class="vm-info-row">
+                        <span class="vm-info-label">💰 Budget</span>
+                        <span class="vm-info-value vm-price">${formattedPrice}</span>
+                    </div>
+                    ${listing.location ? `<div class="vm-info-row">
+                        <span class="vm-info-label">📍 Preferred area</span>
+                        <span class="vm-info-value">${listing.location}</span>
+                    </div>` : ''}
                     ` : `
                     <div class="vm-info-row">
                         <span class="vm-info-label">💰 Price</span>
@@ -1168,7 +1262,7 @@ async function openViewModal(id) {
                     </div>
                     `}
                     <div class="vm-info-row">
-                        <span class="vm-info-label">${isLost ? '👤 Contact' : '👤 Seller'}</span>
+                        <span class="vm-info-label">${isLost ? '👤 Contact' : isWanted ? '🔎 Requested by' : '👤 Seller'}</span>
                         <span class="vm-info-value">
                             ${listing.seller_name}
                             ${profile?.verification_status === 'verified' ? '<span class="verified-badge-inline">✓ Verified</span>' : ''}
@@ -1179,7 +1273,7 @@ async function openViewModal(id) {
                         <span class="vm-info-value">${listing.category}</span>
                     </div>
                     <div class="vm-info-row">
-                        <span class="vm-info-label">📅 ${isLost ? 'Reported' : 'Posted'}</span>
+                        <span class="vm-info-label">📅 ${isLost ? 'Reported' : isWanted ? 'Requested' : 'Posted'}</span>
                         <span class="vm-info-value">${formatDate(listing.created_at)}</span>
                     </div>
                     <div class="vm-info-row">
@@ -1205,13 +1299,13 @@ async function openViewModal(id) {
 
                 <div class="vm-cta-row">
                     <button type="button" id="modal-wa-btn" class="vm-wa-btn">
-                        <span class="vm-wa-icon">💬</span> ${isLost ? 'Contact on WhatsApp' : 'Chat on WhatsApp'}
+                        <span class="vm-wa-icon">💬</span> ${isLost ? 'Contact on WhatsApp' : isWanted ? 'I Have This — Message on WhatsApp' : 'Chat on WhatsApp'}
                     </button>
                     ${currentUser && !isOwner ? `<button type="button" id="modal-rate-btn" class="vm-rate-btn">⭐ Rate Seller</button>` : ''}
                 </div>
 
                 <!-- Staff controls -->
-                ${canSold    ? `<button type="button" id="admin-mark-sold-btn"    class="vm-admin-btn vm-admin-sold">🛑 Mark as SOLD</button>` : ''}
+                ${canSold    ? `<button type="button" id="admin-mark-sold-btn"    class="vm-admin-btn vm-admin-sold">${isWanted ? '✅ Mark as Found' : '🛑 Mark as SOLD'}</button>` : ''}
                 ${canHide    ? `<button type="button" id="admin-hide-btn"         class="vm-admin-btn vm-admin-hide">🙈 Hide Listing</button>` : ''}
                 ${canRestore ? `<button type="button" id="admin-restore-btn"      class="vm-admin-btn vm-admin-restore">👁 Restore Listing</button>` : ''}
 
@@ -1242,13 +1336,18 @@ async function openViewModal(id) {
     });
 
     document.getElementById('admin-mark-sold-btn')?.addEventListener('click', async () => {
-        const ok = await showConfirm({ title:'Mark as Sold', message:`Mark "<strong>${listing.product_name}</strong>" as SOLD?`, confirmText:'Mark SOLD', iconType:'warning', confirmStyle:'warning' });
+        const ok = await showConfirm({
+            title: isWanted ? 'Mark as Found' : 'Mark as Sold',
+            message: isWanted ? `Mark "<strong>${listing.product_name}</strong>" request as fulfilled?` : `Mark "<strong>${listing.product_name}</strong>" as SOLD?`,
+            confirmText: isWanted ? 'Mark Found' : 'Mark SOLD',
+            iconType: 'warning', confirmStyle: 'warning'
+        });
         if (!ok) return;
         await updateListing(listing.id, { status: 'Sold' });
         listing.status = 'Sold';
         viewModal.style.display = 'none';
         await loadListings();
-        showToast('Listing marked as Sold.', 'success');
+        showToast(isWanted ? 'Marked as found.' : 'Listing marked as Sold.', 'success');
     });
 
     document.getElementById('admin-hide-btn')?.addEventListener('click', async () => {
@@ -1510,7 +1609,7 @@ function bindLfModal() {
 // ═══════════════════════════════════════════════════════════════════════
 // POST FORM
 // ═══════════════════════════════════════════════════════════════════════
-function showPostForm() {
+function showPostForm(presetType) {
     if (!currentUser) { openAuthModal('signin'); showToast('Please sign in to post a listing.', 'info'); return; }
     if (!canPost()) {
         showToast('Your student ID is pending review. You can post once verified.', 'warning', 6000);
@@ -1519,6 +1618,13 @@ function showPostForm() {
     if (uploadFormSection) {
         uploadFormSection.style.display = 'block';
         uploadFormSection.scrollIntoView({ behavior: 'smooth' });
+    }
+    if (presetType) {
+        const typeSelect = document.getElementById('listingType');
+        if (typeSelect) {
+            typeSelect.value = presetType;
+            typeSelect.dispatchEvent(new Event('change')); // trigger the existing label/field toggle logic
+        }
     }
 }
 
@@ -1839,6 +1945,7 @@ function bindListingEvents() {
     });
     document.getElementById('hero-post-btn')?.addEventListener('click', showPostForm);
     document.getElementById('hero-lf-btn')?.addEventListener('click', openLfModal);
+    document.getElementById('post-wanted-btn')?.addEventListener('click', () => showPostForm('Wanted'));
 
     // "View All" on the New Arrivals rail — filters/scrolls the existing main
     // grid rather than a real /new-arrivals URL, since this app has no router.
@@ -1866,14 +1973,26 @@ function bindListingEvents() {
         if (uploadFormSection) uploadFormSection.style.display = 'none';
     });
 
-    // Listing type toggle (hide price for Lost & Found)
+    // Listing type toggle — adjusts labels/fields for Lost vs Wanted vs Market
     const listingTypeSelect = document.getElementById('listingType');
     const priceInput        = document.getElementById('price');
     const priceLabel        = document.getElementById('priceLabel');
+    const wantedLocationGroup = document.getElementById('wantedLocationGroup');
+    const productNameLabel  = document.getElementById('productNameLabel');
+    const submitListingBtn  = document.getElementById('submit-listing-btn');
     listingTypeSelect?.addEventListener('change', function() {
-        const isLost = this.value === 'Lost';
+        const isLost   = this.value === 'Lost';
+        const isWanted = this.value === 'Wanted';
+
         if (priceInput) { priceInput.style.display = isLost ? 'none' : 'block'; if (isLost) priceInput.value = '0'; }
-        if (priceLabel) priceLabel.style.display = isLost ? 'none' : 'block';
+        if (priceLabel) {
+            priceLabel.style.display = isLost ? 'none' : 'block';
+            priceLabel.textContent = isWanted ? 'Budget (₦, optional)' : 'Price (₦)';
+        }
+        if (priceInput) priceInput.required = false; // price/budget is optional for both Wanted and (hidden) Lost
+        if (wantedLocationGroup) wantedLocationGroup.style.display = isWanted ? 'block' : 'none';
+        if (productNameLabel) productNameLabel.textContent = isWanted ? "What are you looking for?" : 'Product / Item Name';
+        if (submitListingBtn) submitListingBtn.textContent = isWanted ? 'Post Wanted Request' : 'Publish Listing';
     });
 
     // Post form submit
@@ -1882,20 +2001,22 @@ function bindListingEvents() {
         const submitBtn   = document.getElementById('submit-listing-btn');
         const imageInput  = document.getElementById('image');
         const whatsapp    = document.getElementById('whatsapp').value.trim();
+        const listingType = document.getElementById('listingType').value;
 
         if (!isValidNigerianPhone(whatsapp)) {
             showToast('Enter a valid Nigerian WhatsApp number (e.g. 08012345678).', 'error'); return;
         }
 
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Publishing…';
+        submitBtn.textContent = listingType === 'Wanted' ? 'Posting…' : 'Publishing…';
 
         try {
             const result = await postListing({
                 productName:     document.getElementById('productName').value.trim(),
-                listingType:     document.getElementById('listingType').value,
+                listingType,
                 productCategory: document.getElementById('productCategory').value,
                 price:           document.getElementById('price').value || 0,
+                wantedLocation:  document.getElementById('wantedLocation')?.value.trim() || '',
                 description:     document.getElementById('description').value.trim(),
                 seller:          document.getElementById('seller').value.trim(),
                 whatsapp
@@ -1911,13 +2032,13 @@ function bindListingEvents() {
 
             document.getElementById('postForm').reset();
             if (uploadFormSection) uploadFormSection.style.display = 'none';
-            showToast('Listing published successfully!', 'success');
+            showToast(listingType === 'Wanted' ? 'Wanted request posted!' : 'Listing published successfully!', 'success');
             await loadListings();
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Publish Listing';
+            submitBtn.textContent = listingType === 'Wanted' ? 'Post Wanted Request' : 'Publish Listing';
         }
     });
 
@@ -2219,7 +2340,7 @@ function renderDashboardList() {
             <img src="${l.image_url || ''}" alt="" class="dash-listing-thumb" onerror="this.style.display='none'">
             <div class="dash-listing-info">
                 <p class="dash-listing-name">${escapeHtml(l.product_name)}</p>
-                <p class="dash-listing-meta">${l.type === 'Market' ? '₦' + Number(l.price || 0).toLocaleString() : l.type} • ${formatDate(l.created_at)}${expiryNote}</p>
+                <p class="dash-listing-meta">${l.type === 'Market' ? '₦' + Number(l.price || 0).toLocaleString() : l.type === 'Wanted' ? (Number(l.price||0) > 0 ? 'Budget: ₦' + Number(l.price).toLocaleString() : 'Budget: Flexible') : l.type} • ${formatDate(l.created_at)}${expiryNote}</p>
             </div>
             <div class="dash-listing-actions">
                 ${expired ? `<button type="button" class="dash-renew-btn" data-id="${l.id}">Renew Listing</button>` : ''}
@@ -2252,14 +2373,15 @@ function renderDashboardList() {
         btn.addEventListener('click', async () => {
             const id = btn.dataset.id;
             const listing = dashboardListings.find(l => l.id === id);
+            const isMarket = listing?.type === 'Market';
             const ok = await showConfirm({
-                title: 'Mark as Sold',
-                message: `Mark "<strong>${escapeHtml(listing?.product_name || '')}</strong>" as sold?`,
+                title: isMarket ? 'Mark as Sold' : 'Mark as Resolved',
+                message: `Mark "<strong>${escapeHtml(listing?.product_name || '')}</strong>" as ${isMarket ? 'sold' : 'resolved'}?`,
                 confirmText: 'Confirm', iconType: 'success', confirmStyle: 'primary'
             });
             if (!ok) return;
             await updateListing(id, { status: 'Sold' });
-            showToast('Marked as sold.', 'success');
+            showToast(isMarket ? 'Marked as sold.' : 'Marked as resolved.', 'success');
             await openDashboard();
             await loadListings();
         });
