@@ -520,6 +520,10 @@ button:active {
 .badge-new { background-color: #ede9fe; color: #6d28d9; }
 .badge-wanted { background-color: #fff7ed; color: #c2410c; }
 .badge-featured { background-color: #fef9c3; color: #854d0e; }
+.badge-price-drop { background-color: #fee2e2; color: #b91c1c; }
+
+.price-old { text-decoration: line-through; color: #94a3b8; font-weight: normal; font-size: 0.9em; margin-right: 4px; }
+.price-new { color: #16a34a; font-weight: bold; }
 
 /* Batch 3 — Featured listing spotlight */
 .featured-spotlight { max-width: 420px; margin: 0 auto; }
