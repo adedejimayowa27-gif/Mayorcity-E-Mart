@@ -518,6 +518,12 @@ button:active {
 .badge-lost { background-color: #fef3c7; color: #92400e; }
 .badge-sold { background-color: #fee2e2; color: #991b1b; }
 .badge-new { background-color: #ede9fe; color: #6d28d9; }
+.badge-wanted { background-color: #fff7ed; color: #c2410c; }
+
+/* Batch 2 — Wanted */
+.wanted-section-subtext { color: #64748b; font-size: 13px; margin: -8px 0 12px; }
+.card-wanted { border-top: 3px solid #fb923c; }
+[data-theme="dark"] .wanted-section-subtext { color: #94a3b8; }
 
 /* Batch 1 — Homepage Activity Feed + New Arrivals rail */
 .activity-feed-section { padding: 12px 16px; text-align: center; }
