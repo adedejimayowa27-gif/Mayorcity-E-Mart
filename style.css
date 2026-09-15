@@ -519,6 +519,12 @@ button:active {
 .badge-sold { background-color: #fee2e2; color: #991b1b; }
 .badge-new { background-color: #ede9fe; color: #6d28d9; }
 .badge-wanted { background-color: #fff7ed; color: #c2410c; }
+.badge-featured { background-color: #fef9c3; color: #854d0e; }
+
+/* Batch 3 — Featured listing spotlight */
+.featured-spotlight { max-width: 420px; margin: 0 auto; }
+.featured-spotlight .product-card { border: 2px solid #fbbf24; box-shadow: 0 6px 16px -4px rgba(251,191,36,0.35); }
+.featured-star-inline { font-size: 13px; }
 
 /* Batch 2 — Wanted */
 .wanted-section-subtext { color: #64748b; font-size: 13px; margin: -8px 0 12px; }
