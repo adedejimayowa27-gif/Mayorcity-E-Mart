@@ -576,8 +576,8 @@ function renderListings() {
         <tr data-id="${esc(l.id)}">
             <td class="emart-id-cell">${esc(l.emart_id)}</td>
             <td>${esc(l.product_name)}</td>
-            <td>${l.type === 'Market' ? 'For Sale' : 'Lost & Found'}</td>
-            <td>${l.type === 'Market' ? `₦${Number(l.price||0).toLocaleString()}` : '—'}</td>
+            <td>${l.type === 'Market' ? 'For Sale' : l.type === 'Wanted' ? '🔎 Wanted' : 'Lost & Found'}</td>
+            <td>${l.type === 'Market' ? `₦${Number(l.price||0).toLocaleString()}` : l.type === 'Wanted' ? (Number(l.price||0) > 0 ? `Budget: ₦${Number(l.price).toLocaleString()}` : 'Budget: flexible') : '—'}</td>
             <td>${esc(l.seller_name)}</td>
             <td>${statusBadge(l.status)}</td>
             <td class="${l.reports >= 3 ? 'high-reports' : ''}">${l.reports}</td>
@@ -585,7 +585,7 @@ function renderListings() {
             <td class="action-cell">
                 ${l.status === 'Active'  ? `<button class="admin-action-btn hide-listing-btn"    data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">Hide</button>` : ''}
                 ${l.status === 'Hidden'  ? `<button class="admin-action-btn restore-listing-btn" data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">Restore</button>` : ''}
-                ${l.status === 'Active'  ? `<button class="admin-action-btn mark-sold-btn"       data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">Mark Sold</button>` : ''}
+                ${l.status === 'Active'  ? `<button class="admin-action-btn mark-sold-btn"       data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">${l.type === 'Wanted' ? 'Mark Found' : 'Mark Sold'}</button>` : ''}
                 <button class="admin-action-btn danger-btn delete-listing-btn"
                         data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">Delete</button>
             </td>
