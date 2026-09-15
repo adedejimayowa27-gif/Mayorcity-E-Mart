@@ -575,7 +575,7 @@ function renderListings() {
     tbody.innerHTML = filtered.map(l => `
         <tr data-id="${esc(l.id)}">
             <td class="emart-id-cell">${esc(l.emart_id)}</td>
-            <td>${esc(l.product_name)}</td>
+            <td>${esc(l.product_name)}${l.is_featured ? ' <span class="featured-star-inline" title="Currently featured">⭐</span>' : ''}</td>
             <td>${l.type === 'Market' ? 'For Sale' : l.type === 'Wanted' ? '🔎 Wanted' : 'Lost & Found'}</td>
             <td>${l.type === 'Market' ? `₦${Number(l.price||0).toLocaleString()}` : l.type === 'Wanted' ? (Number(l.price||0) > 0 ? `Budget: ₦${Number(l.price).toLocaleString()}` : 'Budget: flexible') : '—'}</td>
             <td>${esc(l.seller_name)}</td>
@@ -586,6 +586,7 @@ function renderListings() {
                 ${l.status === 'Active'  ? `<button class="admin-action-btn hide-listing-btn"    data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">Hide</button>` : ''}
                 ${l.status === 'Hidden'  ? `<button class="admin-action-btn restore-listing-btn" data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">Restore</button>` : ''}
                 ${l.status === 'Active'  ? `<button class="admin-action-btn mark-sold-btn"       data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">${l.type === 'Wanted' ? 'Mark Found' : 'Mark Sold'}</button>` : ''}
+                ${l.status === 'Active'  ? `<button class="admin-action-btn feature-listing-btn" data-id="${esc(l.id)}" data-name="${esc(l.product_name)}" data-featured="${l.is_featured ? '1' : '0'}">${l.is_featured ? '★ Unfeature' : '☆ Feature'}</button>` : ''}
                 <button class="admin-action-btn danger-btn delete-listing-btn"
                         data-id="${esc(l.id)}" data-name="${esc(l.product_name)}">Delete</button>
             </td>
@@ -600,9 +601,26 @@ function renderListings() {
     tbody.querySelectorAll('.mark-sold-btn').forEach(btn => {
         btn.addEventListener('click', () => changeListingStatus(btn.dataset.id, btn.dataset.name, 'Sold'));
     });
+    tbody.querySelectorAll('.feature-listing-btn').forEach(btn => {
+        btn.addEventListener('click', () => toggleFeaturedListing(btn.dataset.id, btn.dataset.name, btn.dataset.featured === '1'));
+    });
     tbody.querySelectorAll('.delete-listing-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteListingAdmin(btn.dataset.id, btn.dataset.name));
     });
+}
+
+async function toggleFeaturedListing(id, name, isCurrentlyFeatured) {
+    const makeFeatured = !isCurrentlyFeatured;
+    const { error } = await supabase.from('listings').update({ is_featured: makeFeatured }).eq('id', id);
+    if (error) { showToast('Failed: ' + error.message, 'error'); return; }
+    await logAction(makeFeatured ? 'LISTING_FEATURED' : 'LISTING_UNFEATURED', 'listing', id, { name });
+
+    showToast(makeFeatured ? `"${name}" is now featured on the homepage.` : `"${name}" unfeatured.`, 'success');
+    // Featuring one listing un-features any other (enforced by a DB trigger —
+    // see migration-batch3-featured.sql) — reflect that locally too so the
+    // table doesn't show two stars until the next full reload.
+    allListings = allListings.map(l => ({ ...l, is_featured: l.id === id ? makeFeatured : (makeFeatured ? false : l.is_featured) }));
+    renderListings();
 }
 
 async function changeListingStatus(id, name, status) {
