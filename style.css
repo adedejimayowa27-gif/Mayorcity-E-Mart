@@ -533,6 +533,8 @@ button:active {
 /* Batch 2 — Wanted */
 .wanted-section-subtext { color: #64748b; font-size: 13px; margin: -8px 0 12px; }
 .card-wanted { border-top: 3px solid #fb923c; }
+.wanted-empty-state { text-align: center; padding: 24px 16px; color: #64748b; width: 100%; }
+.wanted-empty-state p { margin: 0 0 12px; font-size: 14px; }
 [data-theme="dark"] .wanted-section-subtext { color: #94a3b8; }
 
 /* Batch 1 — Homepage Activity Feed + New Arrivals rail */
@@ -743,6 +745,7 @@ footer {
   }
   nav#main-nav .nav-link { padding: 4px 0; font-size: 14px; }
   .nav-lf-btn { padding: 7px 12px; font-size: 12px; }
+  .nav-dashboard-btn { padding: 6px 10px; font-size: 12px; }
   .auth-open-btn { padding: 8px 16px; font-size: 13px; }
   .nav-admin-link { font-size: 14px; }
 
@@ -981,6 +984,19 @@ footer {
   padding: 8px 0;
 }
 .nav-admin-link:hover { color: #fff; }
+
+.nav-dashboard-btn {
+  background: transparent;
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  padding: 7px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+.nav-dashboard-btn:hover { background: #38bdf8; color: #0f172a; }
+[data-theme="dark"] .nav-dashboard-btn { color: #7dd3fc; border-color: #7dd3fc; }
+[data-theme="dark"] .nav-dashboard-btn:hover { background: #7dd3fc; color: #0f172a; }
 
 .auth-open-btn {
   padding: 9px 20px;
@@ -1389,6 +1405,9 @@ footer {
 .vm-admin-hide { background: #f59e0b; }
 .vm-admin-sold { background: #64748b; }
 .vm-admin-restore { background: #22c55e; }
+.vm-owner-actions { display: flex; gap: 8px; margin-top: 10px; }
+.vm-owner-btn { flex: 1; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 13px; border: 1px solid #cbd5e1; background: #f8fafc; cursor: pointer; }
+.vm-owner-btn-danger { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
 .vm-footer { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e2e8f0; text-align: center; }
 .vm-report-link { color: #ef4444; font-size: 13px; font-weight: 600; text-decoration: none; }
 .vm-report-link:hover { text-decoration: underline; }
