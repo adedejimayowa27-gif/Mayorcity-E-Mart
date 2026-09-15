@@ -48,7 +48,13 @@ function isExpired(listing) {
     if (Date.now() < EXPIRY_RULE_START) return false; // rule not active yet
     const created = new Date(listing.created_at).getTime();
     if (Number.isNaN(created)) return false;
-    return (Date.now() - created) > LISTING_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+    // Every listing's 30-day clock starts no earlier than EXPIRY_RULE_START.
+    // A listing posted before that date gets its clock reset to start THEN
+    // (so it expires 30 days after the rule goes live, not instantly on
+    // day one). A listing posted after that date counts from its own
+    // created_at as normal, same as any listing posted from now on.
+    const clockStart = Math.max(created, EXPIRY_RULE_START);
+    return (Date.now() - clockStart) > LISTING_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 }
 function daysUntilExpiry(listing) {
     if (listing.type === 'Wanted') {
@@ -59,7 +65,8 @@ function daysUntilExpiry(listing) {
     if (Date.now() < EXPIRY_RULE_START) return null; // rule not active yet — no countdown to show
     const created = new Date(listing.created_at).getTime();
     if (Number.isNaN(created)) return null;
-    const daysLeft = LISTING_EXPIRY_DAYS - Math.floor((Date.now() - created) / (24 * 60 * 60 * 1000));
+    const clockStart = Math.max(created, EXPIRY_RULE_START);
+    const daysLeft = LISTING_EXPIRY_DAYS - Math.floor((Date.now() - clockStart) / (24 * 60 * 60 * 1000));
     return daysLeft;
 }
 
