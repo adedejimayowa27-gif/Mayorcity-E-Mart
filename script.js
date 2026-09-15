@@ -563,6 +563,7 @@ async function loadListings() {
     renderActivityFeed();
     renderNewArrivals();
     renderWantedFeed();
+    renderFeaturedListing();
     updateHeroLine();
     displayListings();
 }
@@ -584,6 +585,9 @@ function buildBadges(listing) {
     const typeClass = isWanted ? 'badge-wanted' : (isLost ? lfClass : 'badge-market');
     let html = `<span class="badge ${typeClass}">${typeLabel}</span>`;
     html    += ` <span class="badge badge-cat">${listing.category || 'General'}</span>`;
+    if (listing.is_featured) {
+        html += ` <span class="badge badge-featured">⭐ Featured</span>`;
+    }
     if (listing.type === 'Market' && listing.status === 'Active' && isNewListing(listing)) {
         html += ` <span class="badge badge-new">🆕 New</span>`;
     }
@@ -825,6 +829,25 @@ function isNewListing(listing) {
     const created = new Date(listing.created_at).getTime();
     if (Number.isNaN(created)) return false;
     return (Date.now() - created) <= NEW_ARRIVAL_WINDOW_HOURS * 60 * 60 * 1000;
+}
+
+function renderFeaturedListing() {
+    const section = document.getElementById('featured-section');
+    const slot    = document.getElementById('featured-listing-slot');
+    if (!section || !slot) return;
+
+    // Deliberately no automatic fallback pick here: unlike New Arrivals or
+    // Wanted, "Featured" implies an editorial choice was made. Showing a
+    // system-picked listing under that label when no admin has actually
+    // chosen one would misrepresent it as curated — so it's hidden instead.
+    const featured = allListings.find(l => l.is_featured === true && l.status === 'Active' && !isExpired(l));
+
+    if (!featured) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = '';
+    slot.innerHTML = buildListingCard(featured, 0);
 }
 
 function renderActivityFeed() {
@@ -1196,6 +1219,7 @@ async function deleteListing(id) {
     renderActivityFeed();
     renderNewArrivals();
     renderWantedFeed();
+    renderFeaturedListing();
     updateHeroLine();
     showToast('Listing removed.', 'success');
 }
