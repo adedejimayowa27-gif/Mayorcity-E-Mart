@@ -404,11 +404,13 @@ function updateAuthUI() {
     const userMenu  = document.getElementById('user-menu');
     const notifMenu = document.getElementById('notif-menu');
     const adminLink = document.getElementById('nav-admin-link');
+    const dashBtn   = document.getElementById('nav-dashboard-btn');
 
     if (currentUser) {
         if (authBtn)  authBtn.style.display   = 'none';
         if (userMenu) userMenu.style.display  = '';
         if (notifMenu) notifMenu.style.display = '';
+        if (dashBtn)  dashBtn.style.display   = ''; // always visible once signed in — no need to open the name dropdown first
 
         const name  = currentProfile?.full_name || currentUser.email;
         const email = currentUser.email;
@@ -446,6 +448,7 @@ function updateAuthUI() {
         if (authBtn)  authBtn.style.display   = '';
         if (userMenu) userMenu.style.display  = 'none';
         if (notifMenu) notifMenu.style.display = 'none';
+        if (dashBtn)  dashBtn.style.display   = 'none';
         if (adminControlBar) adminControlBar.style.display = 'none';
         if (adminLink) adminLink.style.display = 'none';
         if (idUploadBanner) idUploadBanner.style.display = 'none';
@@ -952,11 +955,21 @@ function renderWantedFeed() {
         .filter(l => l.type === 'Wanted' && l.status === 'Active' && !isExpired(l))
         .slice(0, 10); // newest-first, same ordering guarantee as renderNewArrivals
 
+    // Unlike New Arrivals / Price Drops, this section always stays visible
+    // — it's the only entry point for "post a Wanted request" on the whole
+    // homepage. Hiding the section when it's empty would hide that CTA too,
+    // right when it matters most (the very first request on the platform).
+    section.style.display = '';
+
     if (candidates.length === 0) {
-        section.style.display = 'none'; // no fabricated "0 students looking" messaging — just hide
+        grid.innerHTML = `
+            <div class="wanted-empty-state">
+                <p>Can't find what you're looking for?</p>
+                <button type="button" id="wanted-empty-cta" class="cta-post-btn">🔎 Drop a Wanted Request</button>
+            </div>`;
+        document.getElementById('wanted-empty-cta')?.addEventListener('click', () => showPostForm('Wanted'));
         return;
     }
-    section.style.display = '';
     grid.innerHTML = candidates.map((listing, i) => buildListingCard(listing, i)).join('');
 }
 
@@ -1323,6 +1336,8 @@ async function openViewModal(id) {
     const canSold    = (isStaff() || isOwner) && listing.status === 'Active';
     const canHide    = isStaff() && listing.status === 'Active';
     const canRestore = isStaff() && listing.status === 'Hidden';
+    const showEdit   = canEditListing(listing);
+    const showDelete = canDeleteListing(listing);
 
     viewModalContent.innerHTML = `
         <div class="vm-layout">
@@ -1405,6 +1420,12 @@ async function openViewModal(id) {
                     ${currentUser && !isOwner ? `<button type="button" id="modal-rate-btn" class="vm-rate-btn">⭐ Rate Seller</button>` : ''}
                 </div>
 
+                ${(showEdit || showDelete) ? `
+                <div class="vm-owner-actions">
+                    ${showEdit   ? `<button type="button" id="modal-edit-btn"   class="vm-owner-btn">✏️ Edit Listing</button>`   : ''}
+                    ${showDelete ? `<button type="button" id="modal-delete-btn" class="vm-owner-btn vm-owner-btn-danger">🗑 Delete Listing</button>` : ''}
+                </div>` : ''}
+
                 <!-- Staff controls -->
                 ${canSold    ? `<button type="button" id="admin-mark-sold-btn"    class="vm-admin-btn vm-admin-sold">${isWanted ? '✅ Mark as Found' : '🛑 Mark as SOLD'}</button>` : ''}
                 ${canHide    ? `<button type="button" id="admin-hide-btn"         class="vm-admin-btn vm-admin-hide">🙈 Hide Listing</button>` : ''}
@@ -1423,6 +1444,15 @@ async function openViewModal(id) {
     document.getElementById('modal-wa-btn')?.addEventListener('click', () => {
         logProductEvent(listing.id, 'whatsapp_click');
         window.open(waLink, '_blank', 'noopener,noreferrer');
+    });
+
+    document.getElementById('modal-edit-btn')?.addEventListener('click', async () => {
+        viewModal.style.display = 'none';
+        await openEditModal(listing.id);
+    });
+    document.getElementById('modal-delete-btn')?.addEventListener('click', async () => {
+        await deleteListing(listing.id); // deleteListing() already handles its own confirm dialog
+        viewModal.style.display = 'none';
     });
 
     document.getElementById('modal-rate-btn')?.addEventListener('click', () => rateSeller(listing));
@@ -2525,6 +2555,9 @@ function renderDashboardList() {
 function bindDashboard() {
     document.getElementById('open-dashboard-btn')?.addEventListener('click', () => {
         document.getElementById('user-dropdown')?.classList.remove('open');
+        openDashboard();
+    });
+    document.getElementById('nav-dashboard-btn')?.addEventListener('click', () => {
         openDashboard();
     });
     document.getElementById('closeDashboardModal')?.addEventListener('click', () => {
