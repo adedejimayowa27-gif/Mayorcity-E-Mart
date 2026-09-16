@@ -741,6 +741,7 @@ function buildListingCard(listing, cardIndex = 0) {
         <div class="card-badges">${buildBadges(listing)}</div>
         <div class="card-image-wrap">
             <img src="${img}" alt="${listing.product_name || 'Product'}" loading="lazy">
+            ${listing.image_url_2 ? `<span class="photo-count-badge">📷 2</span>` : ''}
         </div>
         <div class="card-body">
             <h3 class="card-title">${listing.product_name || 'Untitled'}</h3>
@@ -986,27 +987,31 @@ function updateHeroLine() {
 // ═══════════════════════════════════════════════════════════════════════
 // LISTINGS — POST
 // ═══════════════════════════════════════════════════════════════════════
-async function postListing(formData, imageFile) {
+// Shared by post + edit flows so there's one place that knows how listing
+// photos get uploaded and named, instead of four copies of the same logic.
+async function uploadListingImage(file) {
+    if (!file) return '';
+    const compressedBlob = await readImageAsCompressedDataURL(file);
+    const path = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+    const { error: upErr } = await supabase.storage
+        .from('listing-images')
+        .upload(path, compressedBlob, { contentType: 'image/jpeg' });
+    if (upErr) return '';
+    const { data: urlData } = supabase.storage.from('listing-images').getPublicUrl(path);
+    return urlData?.publicUrl || '';
+}
+
+async function postListing(formData, imageFile, imageFile2) {
     if (!currentUser) throw new Error('You must be signed in to post a listing.');
     if (!canPost())   throw new Error('Your account must be verified before posting. Please wait for admin approval.');
 
     const isLost   = formData.listingType === 'Lost';
     const isWanted = formData.listingType === 'Wanted';
 
-    // Upload image first either way — no point charging someone, then losing
+    // Upload images first either way — no point charging someone, then losing
     // their listing to a slow/failed upload afterward.
-    let imageUrl = '';
-    if (imageFile) {
-        const compressedBlob = await readImageAsCompressedDataURL(imageFile);
-        const path = `${currentUser.id}/${Date.now()}.jpg`;
-        const { error: upErr } = await supabase.storage
-            .from('listing-images')
-            .upload(path, compressedBlob, { contentType: 'image/jpeg' });
-        if (!upErr) {
-            const { data: urlData } = supabase.storage.from('listing-images').getPublicUrl(path);
-            imageUrl = urlData?.publicUrl || '';
-        }
-    }
+    const imageUrl  = await uploadListingImage(imageFile);
+    const imageUrl2 = await uploadListingImage(imageFile2);
 
     if (isWanted) {
         // Wanted requests are free — same trust bar as Market (verified users
@@ -1023,6 +1028,7 @@ async function postListing(formData, imageFile) {
             price:           formData.price || '0', // reused as budget; '0' = "flexible"
             description:     formData.description,
             image_url:       imageUrl,
+            image_url_2:     imageUrl2,
             location:        formData.wantedLocation || '',
             seller_name:     formData.seller,        // the requester's name, not a seller
             seller_whatsapp: formData.whatsapp,       // the requester's contact number
@@ -1042,6 +1048,7 @@ async function postListing(formData, imageFile) {
             price:           '0',
             description:     formData.description,
             image_url:       imageUrl,
+            image_url_2:     imageUrl2,
             seller_name:     formData.seller,
             seller_whatsapp: formData.whatsapp,
             user_id:         currentUser.id
@@ -1075,6 +1082,7 @@ async function postListing(formData, imageFile) {
             price:           formData.price || 0,
             description:     formData.description,
             image_url:       imageUrl,
+            image_url_2:     imageUrl2,
             seller_name:     formData.seller,
             seller_whatsapp: formData.whatsapp,
             user_id:         currentUser.id,
@@ -1116,6 +1124,7 @@ async function postListing(formData, imageFile) {
         price:           formData.price || 0,
         description:     formData.description,
         image_url:       imageUrl,
+        image_url_2:     imageUrl2,
         seller_name:     formData.seller,
         seller_whatsapp: formData.whatsapp
     };
@@ -1341,9 +1350,16 @@ async function openViewModal(id) {
 
     viewModalContent.innerHTML = `
         <div class="vm-layout">
-            <div class="vm-image-wrap">
-                <img src="${img}" alt="${listing.product_name}" class="vm-image">
-                <div class="vm-badges-overlay">${buildBadges(listing)}</div>
+            <div class="vm-image-col">
+                <div class="vm-image-wrap">
+                    <img src="${img}" alt="${listing.product_name}" class="vm-image" id="vm-main-image">
+                    <div class="vm-badges-overlay">${buildBadges(listing)}</div>
+                </div>
+                ${listing.image_url_2 ? `
+                <div class="vm-thumb-strip">
+                    <img src="${listing.image_url || img}" alt="Photo 1" class="vm-thumb active" data-full="${listing.image_url || img}">
+                    <img src="${listing.image_url_2}" alt="Photo 2" class="vm-thumb" data-full="${listing.image_url_2}">
+                </div>` : ''}
             </div>
             <div class="vm-content">
                 <h2 class="vm-title">${listing.product_name}</h2>
@@ -1441,6 +1457,14 @@ async function openViewModal(id) {
         </div>`;
 
     // Bind actions
+    document.querySelectorAll('.vm-thumb').forEach(thumb => {
+        thumb.addEventListener('click', () => {
+            const mainImg = document.getElementById('vm-main-image');
+            if (mainImg) mainImg.src = thumb.dataset.full;
+            document.querySelectorAll('.vm-thumb').forEach(t => t.classList.remove('active'));
+            thumb.classList.add('active');
+        });
+    });
     document.getElementById('modal-wa-btn')?.addEventListener('click', () => {
         logProductEvent(listing.id, 'whatsapp_click');
         window.open(waLink, '_blank', 'noopener,noreferrer');
@@ -1513,6 +1537,21 @@ async function openEditModal(id) {
     document.getElementById('editName').value         = listing.product_name || '';
     document.getElementById('editPrice').value        = listing.price || 0;
     document.getElementById('editDescription').value  = listing.description || '';
+
+    const photos = [listing.image_url, listing.image_url_2].filter(Boolean);
+    const photosBox = document.getElementById('editCurrentPhotos');
+    if (photosBox) {
+        photosBox.innerHTML = photos.length
+            ? photos.map(url => `<img src="${url}" alt="Current photo" class="edit-current-photo-thumb">`).join('')
+            : `<p class="edit-no-photos">No photos yet.</p>`;
+    }
+    // Always start blank — these are "replace/add" inputs, not bound to
+    // existing values (browsers can't pre-fill a file input anyway).
+    const img1Input = document.getElementById('editImage1');
+    const img2Input = document.getElementById('editImage2');
+    if (img1Input) img1Input.value = '';
+    if (img2Input) img2Input.value = '';
+
     editModal.style.display = 'flex';
 }
 
@@ -2132,6 +2171,7 @@ function bindListingEvents() {
         e.preventDefault();
         const submitBtn   = document.getElementById('submit-listing-btn');
         const imageInput  = document.getElementById('image');
+        const imageInput2 = document.getElementById('image2');
         const whatsapp    = document.getElementById('whatsapp').value.trim();
         const listingType = document.getElementById('listingType').value;
 
@@ -2152,7 +2192,7 @@ function bindListingEvents() {
                 description:     document.getElementById('description').value.trim(),
                 seller:          document.getElementById('seller').value.trim(),
                 whatsapp
-            }, imageInput?.files?.[0] || null);
+            }, imageInput?.files?.[0] || null, imageInput2?.files?.[0] || null);
 
             if (result?.redirecting) {
                 // Payment redirect in progress — the browser is about to
@@ -2211,11 +2251,21 @@ function bindListingEvents() {
         const btn = e.target.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = 'Saving…';
         try {
-            await updateListing(id, {
+            const updates = {
                 product_name: document.getElementById('editName').value.trim(),
                 price:        document.getElementById('editPrice').value || '0',
                 description:  document.getElementById('editDescription').value.trim()
-            });
+            };
+
+            // Only touch the photo columns if the person actually chose a
+            // new file — updateListing() does a partial update, so leaving
+            // a key out entirely keeps the existing photo exactly as-is.
+            const img1File = document.getElementById('editImage1')?.files?.[0] || null;
+            const img2File = document.getElementById('editImage2')?.files?.[0] || null;
+            if (img1File) updates.image_url   = await uploadListingImage(img1File);
+            if (img2File) updates.image_url_2 = await uploadListingImage(img2File);
+
+            await updateListing(id, updates);
             editModal.style.display = 'none';
             showToast('Listing updated.', 'success');
             await loadListings();
