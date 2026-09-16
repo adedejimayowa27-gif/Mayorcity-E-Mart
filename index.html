@@ -317,6 +317,9 @@
       <label for="image" id="imageLabel">Item Image</label>
       <input id="image" type="file" accept="image/*">
 
+      <label for="image2">Second Photo (optional, max 2 total)</label>
+      <input id="image2" type="file" accept="image/*">
+
       <button type="submit" id="submit-listing-btn">Publish Listing</button>
     </form>
   </section>
@@ -342,6 +345,15 @@
         <input id="editPrice" type="number">
         <label for="editDescription">Description</label>
         <textarea id="editDescription" rows="4" required></textarea>
+
+        <label>Current Photos</label>
+        <div id="editCurrentPhotos" class="edit-current-photos"></div>
+
+        <label for="editImage1">Replace Photo 1 (optional)</label>
+        <input id="editImage1" type="file" accept="image/*">
+        <label for="editImage2">Add / Replace Photo 2 (optional, max 2 total)</label>
+        <input id="editImage2" type="file" accept="image/*">
+
         <button type="submit" class="submit-action-btn">Save Changes</button>
       </form>
     </div>
