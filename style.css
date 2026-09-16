@@ -1395,9 +1395,27 @@ footer {
 .vm-found-label { color: #166534; }
 .vm-lost-label { color: #991b1b; }
 
+.vm-thumb-strip { display: flex; gap: 8px; margin-top: 8px; }
+.vm-thumb {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 6px;
+  cursor: pointer; opacity: 0.6; border: 2px solid transparent;
+}
+.vm-thumb.active { opacity: 1; border-color: #2563eb; }
+
+.photo-count-badge {
+  position: absolute; bottom: 8px; right: 8px;
+  background: rgba(15,23,42,0.75); color: #fff;
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+}
+.card-image-wrap { position: relative; }
+
+.edit-current-photos { display: flex; gap: 8px; margin-bottom: 10px; }
+.edit-current-photo-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; }
+.edit-no-photos { font-size: 13px; color: #94a3b8; margin: 0 0 10px; }
+
 @media (min-width: 640px) {
   .vm-layout { flex-direction: row; align-items: flex-start; }
-  .vm-image-wrap { width: 45%; flex-shrink: 0; }
+  .vm-image-col { width: 45%; flex-shrink: 0; }
   .vm-image { max-height: 280px; }
 }
 
