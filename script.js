@@ -1314,6 +1314,34 @@ function logProductEvent(listingId, eventType) {
     });
 }
 
+// Full-screen photo zoom, opened by tapping the main image in View Details.
+// `photos` is the listing's 1-2 image URLs — when there are 2, a small
+// thumbnail strip appears inside the lightbox too, so switching photos
+// doesn't require closing and reopening it.
+function openPhotoLightbox(currentSrc, photos) {
+    const lightbox = document.getElementById('photoLightbox');
+    const img      = document.getElementById('photoLightboxImage');
+    const thumbsEl = document.getElementById('photoLightboxThumbs');
+    if (!lightbox || !img) return;
+
+    img.src = currentSrc;
+
+    if (thumbsEl) {
+        thumbsEl.innerHTML = (photos && photos.length > 1)
+            ? photos.map(url => `<img src="${url}" class="lightbox-thumb${url === currentSrc ? ' active' : ''}" data-full="${url}">`).join('')
+            : '';
+        thumbsEl.querySelectorAll('.lightbox-thumb').forEach(t => {
+            t.addEventListener('click', () => {
+                img.src = t.dataset.full;
+                thumbsEl.querySelectorAll('.lightbox-thumb').forEach(x => x.classList.remove('active'));
+                t.classList.add('active');
+            });
+        });
+    }
+
+    lightbox.style.display = 'flex';
+}
+
 async function openViewModal(id) {
     const listing = allListings.find(l => l.id === id);
     if (!listing || !viewModalContent) return;
@@ -1457,6 +1485,7 @@ async function openViewModal(id) {
         </div>`;
 
     // Bind actions
+    const allPhotos = [listing.image_url, listing.image_url_2].filter(Boolean);
     document.querySelectorAll('.vm-thumb').forEach(thumb => {
         thumb.addEventListener('click', () => {
             const mainImg = document.getElementById('vm-main-image');
@@ -1464,6 +1493,9 @@ async function openViewModal(id) {
             document.querySelectorAll('.vm-thumb').forEach(t => t.classList.remove('active'));
             thumb.classList.add('active');
         });
+    });
+    document.getElementById('vm-main-image')?.addEventListener('click', () => {
+        openPhotoLightbox(document.getElementById('vm-main-image').src, allPhotos);
     });
     document.getElementById('modal-wa-btn')?.addEventListener('click', () => {
         logProductEvent(listing.id, 'whatsapp_click');
@@ -2237,6 +2269,20 @@ function bindListingEvents() {
         if (viewModal) viewModal.style.display = 'none';
     });
     viewModal?.addEventListener('click', e => { if (e.target === viewModal) viewModal.style.display = 'none'; });
+
+    // Photo lightbox close (tap the ✕, tap the dark backdrop, or press Escape)
+    const photoLightbox = document.getElementById('photoLightbox');
+    document.getElementById('closePhotoLightbox')?.addEventListener('click', () => {
+        if (photoLightbox) photoLightbox.style.display = 'none';
+    });
+    photoLightbox?.addEventListener('click', e => {
+        if (e.target === photoLightbox) photoLightbox.style.display = 'none';
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && photoLightbox && photoLightbox.style.display === 'flex') {
+            photoLightbox.style.display = 'none';
+        }
+    });
 
     // Edit modal close
     document.getElementById('closeEditModal')?.addEventListener('click', () => {
