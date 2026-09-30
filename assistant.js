@@ -2,7 +2,7 @@
 // Deliberately standalone: creates its OWN Supabase client from the already-global
 // window.SUPABASE_URL / window.SUPABASE_ANON_KEY (set by config.js) rather than
 // importing anything from script.js, so this file can never break the main app.
-// Calls /.netlify/functions/ai-assistant, which proxies to Groq.
+// Calls /api/ai-assistant, which proxies to Groq.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -196,7 +196,7 @@ function initWidget() {
 
     try {
       const context = await contextPromise;
-      const resp = await fetch('/.netlify/functions/ai-assistant', {
+      const resp = await fetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
